@@ -381,14 +381,12 @@ const AI_POLICIES = {
 /* ================================================================
    === Волчьи AI-политики =========================================
    wolf и wolf_alpha используют общий шаблон (атака → движение →
-   доп.атака → endTurn), но с двумя отличиями от zombie:
-     1) Приоритет цели: KILL → MAX joint_hunt_stacks → MIN hp →
-        MIN luck → random. (У зомби — KILL → MIN hp → MIN luck.)
-     2) wolf-only: фаза движения сначала проверяет, есть ли в зоне
-        видимости (на доске) живой лидер группы 'wolves' той же
-        команды. Если расстояние Манхэттен > 5 — движемся к лидеру,
-        иначе обычная политика «к ближайшему врагу». wolf_alpha
-        этой проверки не делает (он сам лидер, ему не за кем идти).
+   доп.атака → endTurn). Отличие от zombie:
+     Приоритет цели: KILL → MAX joint_hunt_stacks → MIN hp →
+     MIN luck → random. (У зомби — KILL → MIN hp → MIN luck.)
+   Сбор стаи вокруг лидера убран балансной правкой 14.05.2026 —
+   wolf и wolf_alpha теперь идут на ближайшего врага по одинаковой
+   политике.
    ================================================================ */
 
 /* Стаки joint_hunt на цели — централизованный читатель.
@@ -448,28 +446,6 @@ function aiPickAttackTargetWolf(u) {
   bucket = bucket.filter(t => t.hp === minHp);
   // 4) тай-брейк по Удаче и случайно
   return aiPickByLuckThenRandom(bucket);
-}
-
-/* Найти лидера группы 'wolves' той же команды для wolf-юнита.
-   Источник правды: первый живой юнит с CLASSES[id].isLeader === true
-   и group === 'wolves'. Если несколько лидеров на одной команде —
-   возвращает ближайшего по Манхэттену (на случай будущих сценариев
-   с несколькими альфами). */
-function findPackLeader(u) {
-  if (!u) return null;
-  const candidates = state.units.filter(o => {
-    if (!o || !o.alive || o.id === u.id) return false;
-    if (o.team !== u.team) return false;
-    const cls = CLASSES[o.classId];
-    return cls && cls.group === 'wolves' && cls.isLeader === true;
-  });
-  if (!candidates.length) return null;
-  candidates.sort((a, b) => {
-    const da = Math.abs(a.row - u.row) + Math.abs(a.col - u.col);
-    const db = Math.abs(b.row - u.row) + Math.abs(b.col - u.col);
-    return da - db;
-  });
-  return candidates[0];
 }
 
 /* Шаг движения волка к врагу — копия aiZombieStepMove, но цель
@@ -576,70 +552,57 @@ function aiWolfStepMove(u) {
   executeMove(bestCell.row, bestCell.col);
 }
 
-/* Общий шаблон политики волков — фабрика, которая делает фактическую
-   функцию ИИ. followLeader=true для рядового волка (фаза движения
-   сначала проверяет, не далеко ли вожак); false для wolf_alpha. */
-function makeWolfPolicy(followLeader) {
-  return function(u) {
-    const steps = [];
-    // Шаг A: атака с места по wolf-приоритетам.
-    const t1 = aiPickAttackTargetWolf(u);
-    if (t1) {
-      steps.push(() => {
-        const again = aiPickAttackTargetWolf(u);
-        if (again) executeAttack(again.id);
-      });
+/* Общая политика wolf/wolf_alpha. Балансная правка 14.05.2026:
+   сбор стаи вокруг лидера убран — волки идут на ближайшего врага
+   независимо от расположения вожака (стая ощущалась слишком
+   связанной, +cohesion давал перекос по урону через ауру лидера).
+   Теперь wolf и wolf_alpha — одна и та же функция. */
+function wolfPolicy(u) {
+  const steps = [];
+  // Шаг A: атака с места по wolf-приоритетам.
+  const t1 = aiPickAttackTargetWolf(u);
+  if (t1) {
+    steps.push(() => {
+      const again = aiPickAttackTargetWolf(u);
+      if (again) executeAttack(again.id);
+    });
+  }
+  // Шаг B: движение.
+  steps.push(() => {
+    if (!u.alive) return;
+    // 1) форс-директивы (provoked/lure) — общий приоритет.
+    const directive = getForcedMoveDirective(u);
+    if (dispatchForcedMove(u, directive)) return;
+    // 2) обычное движение к ближайшему противнику по wolf-приоритетам.
+    aiWolfStepMove(u);
+  });
+  // Шаг C: вторая атака, если она ещё не была потрачена.
+  steps.push(() => {
+    if (!u.alive) return;
+    if (u.actionsUsedThisTurn.attack) return;
+    const t2 = aiPickAttackTargetWolf(u);
+    if (t2) executeAttack(t2.id);
+  });
+  // Финал: см. AI_POLICIES.zombie — endTurn НЕ выходит по !u.alive.
+  steps.push(() => {
+    if (state.gameOver) return;
+    if (typeof consumeForcedMoveEffects === 'function') {
+      consumeForcedMoveEffects(u);
     }
-    // Шаг B: движение.
-    steps.push(() => {
-      if (!u.alive) return;
-      // 1) форс-директивы (provoked/lure) — общий приоритет.
-      const directive = getForcedMoveDirective(u);
-      if (dispatchForcedMove(u, directive)) return;
-      // 2) wolf-only: при наличии лидера группы и расстоянии Manhattan>5
-      //    — идём к лидеру (стая собирается). У wolf_alpha этот шаг
-      //    отключён.
-      if (followLeader) {
-        const leader = findPackLeader(u);
-        if (leader) {
-          const md = Math.abs(leader.row - u.row) + Math.abs(leader.col - u.col);
-          if (md > 5) {
-            aiMoveTowardCell(u, leader.row, leader.col);
-            return;
-          }
-        }
-      }
-      // 3) обычное движение к ближайшему противнику по wolf-приоритетам.
-      aiWolfStepMove(u);
-    });
-    // Шаг C: вторая атака, если она ещё не была потрачена.
-    steps.push(() => {
-      if (!u.alive) return;
-      if (u.actionsUsedThisTurn.attack) return;
-      const t2 = aiPickAttackTargetWolf(u);
-      if (t2) executeAttack(t2.id);
-    });
-    // Финал: см. AI_POLICIES.zombie — endTurn НЕ выходит по !u.alive.
-    steps.push(() => {
-      if (state.gameOver) return;
-      if (typeof consumeForcedMoveEffects === 'function') {
-        consumeForcedMoveEffects(u);
-      }
-      if (state.activeUnitId !== u.id) return;
-      endTurn();
-    });
-    let i = 0;
-    const next = () => {
-      if (i >= steps.length) return;
-      const fn = steps[i++];
-      try { fn(); } catch (err) { console.error('[AI wolf]', err); }
-      setTimeout(next, (typeof AnimSpeed !== 'undefined') ? AnimSpeed.scaled(AI_STEP_DELAY_MS) : AI_STEP_DELAY_MS);
-    };
-    next();
+    if (state.activeUnitId !== u.id) return;
+    endTurn();
+  });
+  let i = 0;
+  const next = () => {
+    if (i >= steps.length) return;
+    const fn = steps[i++];
+    try { fn(); } catch (err) { console.error('[AI wolf]', err); }
+    setTimeout(next, (typeof AnimSpeed !== 'undefined') ? AnimSpeed.scaled(AI_STEP_DELAY_MS) : AI_STEP_DELAY_MS);
   };
+  next();
 }
-AI_POLICIES.wolf = makeWolfPolicy(true);
-AI_POLICIES.wolf_alpha = makeWolfPolicy(false);
+AI_POLICIES.wolf = wolfPolicy;
+AI_POLICIES.wolf_alpha = wolfPolicy;
 
 /* ================================================================
    === Скелеты (09.05.2026) =======================================

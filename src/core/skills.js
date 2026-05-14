@@ -601,7 +601,9 @@ function refreshInitiativeAfterCurrent() {
    всех юнитах группы 'wolves'. Для каждого волка проверяем, есть ли
    живой лидер той же команды и группы с пассивкой pack_leader в
    радиусе Чебышева 5. Если есть — обеспечиваем эффект pack_leader_aura
-   с правильной величиной statMods.str (ceil(базовая Сила цели * 0.30)).
+   с правильной величиной statMods.str (floor(базовая Сила цели * 0.30),
+   балансная правка 14.05.2026 — раньше было ceil, давало +1 к Силе
+   там, где «справедливо» 0).
    Если нет — снимаем эффект.
 
    ВАЖНО: бонус считается от unit.stats.str (базовое значение), не от
@@ -648,7 +650,7 @@ function refreshPackLeaderAuras() {
       if (Math.max(dr, dc) <= 5) { leaderInRange = L; break; }
     }
     const baseStr = (wolf.stats && Number.isFinite(wolf.stats.str)) ? wolf.stats.str : 0;
-    const bonus = Math.ceil(baseStr * 0.30);
+    const bonus = Math.floor(baseStr * 0.30);
     if (!Array.isArray(wolf.effects)) wolf.effects = [];
     const existing = wolf.effects.find(e => e && e.id === 'pack_leader_aura');
     if (leaderInRange && bonus > 0) {
