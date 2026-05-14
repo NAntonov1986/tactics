@@ -1,0 +1,144 @@
+/* effects.css — спецэффекты заклинаний и статус-эффекты на панели юнита.
+   Что внутри:
+     • Вспышка фаербола (.fireball-blast + @keyframes fireball-blast,
+       .fireball-blast .fireball-sprite + @keyframes fireball-sprite-pop) —
+       живёт на effects-layer поля боя.
+     • Статус-эффекты на нижней панели: .effects-list (контейнер чипов),
+       .effect-chip (квадрат), .effect-chip img/.effect-emoji (содержимое),
+       .effect-chip .duration-badge (бейдж длительности).
+     • .effects-empty — текст «нет эффектов».
+   Что НЕ внутри:
+     • Подсветки прицеливания фаербола (.highlight-cell.fireball-*) — в board.css.
+     • Слот активного навыка (.slot.skill-active) — в panel.css.
+   Где править длительность анимации фаербола: @keyframes fireball-blast
+     и параметр animation в .fireball-blast (520мс) — менять ОДНОВРЕМЕННО
+     с константой длительности в JS, иначе элемент удалится раньше/позже анимации.
+   Где править вид чипа эффекта: .effect-chip и его дочерние правила.
+*/
+
+/* Спрайт огненного шара в эпицентре взрыва. Появляется поверх
+   радиально-градиентной вспышки, кратковременно «выпрыгивает» и
+   гаснет вместе с ней. Размер ≈ 1.6 клетки, по центру 3×3. */
+.fireball-blast .fireball-sprite {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: calc(var(--cell) * 1.6);
+  height: calc(var(--cell) * 1.6);
+  transform: translate(-50%, -50%) scale(0.4);
+  opacity: 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  pointer-events: none;
+  /* C24: длительность делится на --anim-speed-mul. JS-таймер
+     удаления .fireball-blast (560 мс) идёт через AnimSpeed.scaled. */
+  animation: fireball-sprite-pop calc(520ms / var(--anim-speed-mul, 1)) ease-out forwards;
+  filter: drop-shadow(0 0 8px rgba(255, 160, 60, 0.85));
+}
+@keyframes fireball-sprite-pop {
+  0%   { opacity: 0;    transform: translate(-50%, -50%) scale(0.40) rotate(-12deg); }
+  18%  { opacity: 1;    transform: translate(-50%, -50%) scale(1.10) rotate(2deg); }
+  55%  { opacity: 0.85; transform: translate(-50%, -50%) scale(1.00) rotate(0deg); }
+  100% { opacity: 0;    transform: translate(-50%, -50%) scale(0.85) rotate(0deg); }
+}
+
+/* Вспышка 3×3 при взрыве фаербола. Абсолютно позиционированный
+   div поверх клеток цели; живёт ~520 мс и удаляется JS'ом. */
+.fireball-blast {
+  position: absolute;
+  top: 0; left: 0;
+  width: calc(var(--cell) * 3);
+  height: calc(var(--cell) * 3);
+  transform: translate(calc(var(--c) * var(--cell)), calc(var(--r) * var(--cell)));
+  pointer-events: none;
+  border-radius: 8px;
+  /* C24: длительность делится на --anim-speed-mul. */
+  animation: fireball-blast calc(520ms / var(--anim-speed-mul, 1)) ease-out forwards;
+  z-index: 5;
+}
+@keyframes fireball-blast {
+  0%   { opacity: 0;    background: radial-gradient(circle, rgba(255,240,180,0.0) 0%, rgba(255,130,40,0.0) 60%, rgba(120,20,0,0.0) 100%); box-shadow: 0 0 0 0 rgba(255,160,60,0); }
+  10%  { opacity: 1;    background: radial-gradient(circle, rgba(255,250,220,0.95) 0%, rgba(255,160,60,0.85) 45%, rgba(180,40,10,0.55) 100%); box-shadow: 0 0 28px 4px rgba(255,160,60,0.8); }
+  55%  { opacity: 0.85; background: radial-gradient(circle, rgba(255,200,100,0.7) 0%, rgba(220,90,30,0.55) 60%, rgba(120,20,0,0.25) 100%); box-shadow: 0 0 20px 2px rgba(220,90,30,0.5); }
+  100% { opacity: 0;    background: radial-gradient(circle, rgba(180,60,20,0.0) 0%, rgba(80,20,0,0.0) 80%, rgba(0,0,0,0.0) 100%); box-shadow: 0 0 0 0 rgba(100,40,10,0); }
+}
+
+/* Секция «Воздействия»: горизонтальный flex-ряд квадратных чипов.
+   Каждый чип — pixel-art иконка эффекта 48×48px + круглый бейдж
+   с оставшейся длительностью в правом нижнем углу (торчит на пару
+   пикселей за границу чипа, чтобы не «наезжать» на иконку).
+   Tooltip (native title) — «Название\nОписание\n[модификатор]\nОсталось N ход.». */
+.effects-list {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+.effects-empty { color: var(--text-dim); font-style: italic; font-size: 11px; }
+.effect-chip {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  background: #0e0a07;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  flex: 0 0 48px;
+}
+/* Camp v1.5-polarity (09.05.2026): цветовая рамка по полярности эффекта.
+   Бафф (выгода носителю) — зелёная с лёгким свечением; дебафф (вред) —
+   красная. Полярность определяется effectPolarityOf() в core/effects.js
+   (читает eff.polarity, фолбэк на SKILLS[id].polarity, фолбэк 'debuff').
+   Не используем box-shadow большой — он расширяет видимый bbox чипа и
+   ломает grid-выравнивание; вместо этого яркая рамка + лёгкая внутренняя
+   подсветка через inset box-shadow. */
+.effect-chip-buff {
+  border-color: #6cd86c;
+  box-shadow: inset 0 0 0 1px rgba(108, 216, 108, 0.45);
+}
+.effect-chip-debuff {
+  border-color: #d65a3c;
+  box-shadow: inset 0 0 0 1px rgba(214, 90, 60, 0.4);
+}
+.effect-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.effect-chip .effect-emoji {
+  font-size: 30px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.effect-chip .duration-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  background: var(--panel-bg);
+  color: var(--accent);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 14px;
+  text-align: center;
+  box-sizing: border-box;
+}

@@ -1,0 +1,217 @@
+/* dev-tools.css — стили отладочной панели «Выдача навыков» (см. ui/dev-tools.js).
+   Что внутри: floating-кнопка справа, popover, типография рядов, бейдж
+   «НЕТ ИСПОЛНИТЕЛЯ». Палитра — общеигровая (var(--*)).
+   Что НЕ внутри: ничего, кроме DevTools — модуль самодостаточен и
+   вырезается одной парой <link>/<script> в index.html. */
+
+.devtools-btn {
+  position: fixed;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  z-index: 9000;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0.7;
+}
+.devtools-btn:hover { opacity: 1; }
+
+.devtools-popover {
+  position: fixed;
+  top: 50%;
+  right: 44px;
+  transform: translateY(-50%);
+  z-index: 9001;
+  width: 380px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 10px;
+  color: var(--text);
+  font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+
+.devtools-popover .dt-header {
+  font-weight: bold;
+  color: var(--accent);
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--panel-border);
+  padding-bottom: 4px;
+}
+
+.devtools-popover .dt-section-title {
+  margin-top: 10px;
+  margin-bottom: 4px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+.devtools-popover .dt-row,
+.devtools-popover .dt-slot,
+.devtools-popover .dt-skill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+  flex-wrap: wrap;
+}
+
+.devtools-popover .dt-label { color: var(--text-dim); }
+.devtools-popover .dt-select,
+.devtools-popover .dt-tier,
+.devtools-popover .dt-slot-pick {
+  background: var(--grid-dark);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+.devtools-popover .dt-slot-num { color: var(--text-dim); width: 22px; display: inline-block; }
+.devtools-popover .dt-slot-icon { font-size: 14px; }
+.devtools-popover .dt-slot-name { color: var(--text); }
+.devtools-popover .dt-slot-tier { color: var(--accent); font-size: 11px; }
+.devtools-popover .dt-slot-empty { color: var(--text-dim); font-style: italic; }
+
+.devtools-popover .dt-skill-list { display: flex; flex-direction: column; gap: 2px; }
+.devtools-popover .dt-skill-icon { font-size: 14px; }
+.devtools-popover .dt-skill-name { flex: 1; min-width: 100px; }
+.devtools-popover .dt-skill-badge {
+  background: #7a2a2a;
+  color: #ffd0c0;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.devtools-popover button {
+  background: var(--grid-light);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.devtools-popover button:hover { background: var(--panel-border); color: var(--accent); }
+/* С25: акцентная кнопка «Победа волны» — отличаемся цветом от «Сбросить»,
+   чтобы случайно не нажать. */
+.devtools-popover .dt-victory {
+  background: rgba(72, 116, 56, 0.85);
+  color: #f0f5e0;
+  border-color: #6da542;
+}
+.devtools-popover .dt-victory:hover {
+  background: #6da542;
+  color: #1a1410;
+}
+/* С25+: кнопка «Дамп для агента» — синяя, отличается от green-victory
+   и обычных серых кнопок. Используется для удалённой диагностики. */
+.devtools-popover .dt-debug-dump {
+  background: rgba(56, 92, 144, 0.85);
+  color: #e0eaf5;
+  border-color: #5a7faa;
+}
+.devtools-popover .dt-debug-dump:hover {
+  background: #5a7faa;
+  color: #f5f8fb;
+}
+
+.devtools-popover .dt-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 10px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 8px;
+}
+
+.devtools-popover .dt-empty {
+  color: var(--text-dim);
+  font-style: italic;
+  text-align: center;
+  margin: 16px 0;
+}
+
+/* === Двухуровневые выпадайки реестра навыков (классы → kind) ===
+   Внешний <details class="dt-class"> — это «папка» класса, внутренний
+   <details class="dt-kind"> — Активные/Пассивные. Кастомные маркеры
+   ▶/▾ управляются через [open]-состояние; стандартный disclosure-
+   треугольник прячем (list-style и ::-webkit-details-marker).
+*/
+.devtools-popover details.dt-class {
+  margin: 4px 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  background: var(--grid-dark);
+}
+.devtools-popover details.dt-class > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 8px;
+  color: var(--accent);
+  font-weight: bold;
+}
+.devtools-popover details.dt-class > summary::-webkit-details-marker { display: none; }
+.devtools-popover details.dt-class > summary::before {
+  content: '▶';
+  display: inline-block;
+  width: 12px;
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+.devtools-popover details.dt-class[open] > summary::before { content: '▼'; }
+.devtools-popover details.dt-class[open] > summary {
+  border-bottom: 1px solid var(--panel-border);
+}
+.devtools-popover .dt-class-count {
+  color: var(--text-dim);
+  font-weight: normal;
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+.devtools-popover details.dt-kind {
+  margin: 4px 6px 4px 16px;
+}
+.devtools-popover details.dt-kind > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+.devtools-popover details.dt-kind > summary::-webkit-details-marker { display: none; }
+.devtools-popover details.dt-kind > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 10px;
+  margin-right: 4px;
+}
+.devtools-popover details.dt-kind[open] > summary::before { content: '▾'; }
+.devtools-popover .dt-kind-count {
+  color: var(--text-dim);
+  margin-left: 4px;
+}
+.devtools-popover details.dt-kind > .dt-skill-list {
+  padding: 4px 0 4px 4px;
+}

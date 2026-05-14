@@ -1,0 +1,89 @@
+/* base.css — переменные темы, reset, общий layout, общие правила.
+   Что внутри:
+     • :root — все цветовые/размерные CSS-переменные (цвета команд, цвет HP/маны,
+       размер клетки, ширина сетки и т.п.). Менять глобальную палитру/масштаб — здесь.
+     • Reset (* box-sizing) и базовые html/body.
+     • Высокоуровневая раскладка страницы: .arena, .workspace.
+     • Унифицированное правило рендеринга pixel-art спрайтов внутри
+       .portrait img / .ini-chip img / .tomb-portrait img / .slot img — общее, поэтому
+       живёт здесь, а не дублируется в panel/initiative/tombstone.
+   Что НЕ внутри:
+     • Никаких компонентных стилей (units/board/panel/initiative/effects/tombstone/log).
+   Кто использует:
+     • Все остальные css-файлы и весь HTML (через переменные :root).
+*/
+
+:root {
+  --cell: 40px;
+  --grid-cells: 20;
+  --bg: #1a1410;
+  --panel-bg: #2a201a;
+  --panel-border: #5a4832;
+  --grid-dark: #2a2520;
+  --grid-light: #34302a;
+  /* Цвет линий сетки поверх травяной арены (см. board.css → .cell).
+     Полупрозрачный чёрный — трава просвечивает, клетки остаются
+     различимы. Подкрутить можно тут одной правкой. */
+  --grid-line-color: rgba(0, 0, 0, 0.35);
+  --text: #d8c9a8;
+  --text-dim: #8a7a5a;
+  --accent: #e2c078;
+  --team-a: #b85c5c;  /* верхняя команда — красные */
+  --team-b: #5c8cb8;  /* нижняя команда — синие */
+  --hp: #b44c4c;
+  --mana: #4c7cc4;
+  --selected: #e2c078;
+  --acting: #78e28a;
+  --fire: #ff8a3c;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  min-height: 100vh;
+}
+
+.arena {
+  /* Корневой layout игры: верх — поле + правая панель инициативы (1fr),
+     ниже — нижние panel/log/dev-tools (auto). min-height: 100vh даёт
+     арене занять всё окно при пустом контенте, не растягиваясь дальше. */
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  gap: 10px;
+  padding: 10px;
+  min-height: 100vh;
+}
+
+/* ============ РАБОЧАЯ ОБЛАСТЬ (поле + инициатива справа) ============ */
+.workspace {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  min-height: 0;  /* чтобы дочерний 1fr мог сжиматься в grid */
+}
+
+/* Унифицированный «спрайт внутри коробки» — для портрета юнита в
+   боковой панели, чипа в очерёдности, мини-портрета в тултипе могилы
+   и слотов экипировки/навыков. PNG-файлы спрайтов УЖЕ обрезаны под
+   bounding box контента (без прозрачных полей), поэтому 100% ширины/
+   высоты дают визуально крупного героя. image-rendering: pixelated
+   даёт чёткий апскейл pixel-art без сглаживания.
+   Живёт в base.css, а не в panel/initiative/tombstone, потому что
+   правило кросс-доменное и физически одно. */
+.portrait img,
+.ini-chip img,
+.tomb-portrait img,
+.slot img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}

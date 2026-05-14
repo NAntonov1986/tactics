@@ -1,0 +1,251 @@
+/* panel.css — все панели UI: портретная панель в углу поля, нижняя панель
+   с действиями/слотами/статами/экипировкой, базовая стилистика кнопок.
+   Что внутри:
+     • Портретная панель (.portrait-panel + .portrait + .portrait-info + .bar/.label/.value).
+     • Контейнер нижней панели (.bottom + .section + .section-title).
+     • Кнопки действий (.action-buttons, .btn, .btn:hover/:disabled, .btn.primary,
+       .btn.mode-active, .btn.action-used).
+     • Слоты навыков и экипировки (.slots, .slot + состояния, .equipment-slots).
+     • Слот активного навыка с состояниями кликабельности — здесь же
+       (.slot.skill-active + .mode-on/.used/.no-mana).
+     • Секция «Характеристики» (.stats-list, .stat-cell, .stat-icon, .stat-emoji,
+       .stat-value + дебафф/бафф цвета).
+     • .placeholder-panel — заглушка, когда юнит не выбран.
+   Что НЕ внутри:
+     • Полоска инициативы (initiative.css), статус-эффекты (effects.css), лог (log.css).
+   Где править размер иконки стата: .stats-list .stat-icon (width/height/flex-basis).
+   Где править поведение клика по фаерболу: .slot.skill-active.mode-on (визуал) +
+     JS-обработчик (отдельно).
+*/
+
+/* Портретная панель — квадратный оверлей в ЛЕВОМ верхнем углу поля
+   (С24-рефактор: положение зафиксировано здесь, без скрытого override
+   в fantasy.css — раньше fantasy переопределял position на relative,
+   и портрет выпадал в нормальный поток, фактически вставая слева). */
+.portrait-panel {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  width: 200px;
+  height: 200px;
+  background: rgba(42, 32, 26, 0.92);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.portrait {
+  width: 72px; height: 72px;
+  align-self: center;
+  background: #0e0a07;
+  border: 2px solid var(--panel-border);
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 44px;
+  flex-shrink: 0;
+}
+.portrait.team-a { border-color: var(--team-a); }
+.portrait.team-b { border-color: var(--team-b); }
+.portrait-info { text-align: center; font-size: 11px; }
+.portrait-info .name { font-weight: 600; color: var(--accent); margin-bottom: 2px; font-size: 12px; }
+.portrait-info .team-label { color: var(--text-dim); font-size: 10px; margin-bottom: 4px; }
+.bar { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 2px; font-size: 11px; }
+.bar .label { color: var(--text-dim); }
+.bar .value { font-variant-numeric: tabular-nums; }
+.bar .hp-label { color: var(--hp); }
+.bar .mana-label { color: var(--mana); }
+
+/* ============ НИЖНЯЯ ПАНЕЛЬ ============ */
+.bottom {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 140px 1fr 1fr 1fr 1fr;
+  gap: 12px;
+}
+.bottom .section {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.bottom .section-title {
+  font-size: 10px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 1px;
+}
+
+.action-buttons { display: flex; flex-direction: column; gap: 6px; }
+.btn {
+  background: #1a1410;
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.btn:hover:not(:disabled) { background: #2a2018; border-color: var(--accent); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.primary { border-color: var(--accent); color: var(--accent); }
+
+/* Слоты навыков/экипировки. justify-content: start + явные размеры
+   слотов вместо `1fr`: иначе при широкой секции слоты раздуваются до
+   ~100px и нижняя панель растёт по высоте за счёт aspect-ratio: 1. */
+.slots { display: grid; grid-template-columns: repeat(4, 56px); gap: 4px; justify-content: start; }
+.slot {
+  background: #0e0a07;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  aspect-ratio: 1;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  color: var(--text-dim);
+  cursor: default;
+}
+.slot.filled { color: var(--accent); }
+.slot.active { cursor: pointer; }
+.slot.active:hover { border-color: var(--accent); }
+
+/* Иконки слотов навыков (активные + пассивные) часто имеют прозрачные/
+   тёмные поля внутри самой PNG, из-за чего на чёрном фоне ячейки
+   кажутся мелковатыми. base.css задаёт .slot img → width/height 100%
+   + object-fit:contain (то есть картинка уже на весь слот) — здесь
+   ДОНАСТРОЙКА для .slots: масштабируем картинку чуть больше ячейки и
+   режем излишки overflow:hidden. Затрагивает ТОЛЬКО слоты навыков
+   (.slots .slot) — экипировку (.equipment-slots), портрет, чип
+   инициативы и тумбу не трогаем. Если ассеты позже придут уже
+   tightly-cropped — этот блок можно убрать. */
+.slots .slot { overflow: hidden; }
+.slots .slot img { transform: scale(1.4); transform-origin: center; }
+
+.equipment-slots { display: grid; grid-template-columns: repeat(5, 56px); gap: 4px; justify-content: start; }
+
+/* Слот активного навыка — кликабельный, когда условия выполнены.
+   Логика «доступен / нет маны / на кулдауне» вешает соответствующие
+   модификаторы (.mode-on / .used / .no-mana). */
+.slot.skill-active {
+  cursor: pointer;
+  border-color: var(--panel-border);
+  transition: border-color 120ms, background 120ms;
+}
+.slot.skill-active:hover {
+  border-color: var(--fire);
+  background: #2a1a0e;
+}
+.slot.skill-active.mode-on {
+  border-color: var(--fire);
+  background: #3a2010;
+  box-shadow: 0 0 0 1px var(--fire) inset;
+}
+.slot.skill-active.used,
+.slot.skill-active.no-mana {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.slot.skill-active.used { text-decoration: line-through; }
+
+/* Кнопки действий — состояние «режим включён» */
+.btn.mode-active {
+  background: #3a2d1c;
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.btn.action-used {
+  text-decoration: line-through;
+  opacity: 0.35;
+}
+
+/* Секции «Характеристики» и «Воздействия» — общий шрифт.
+   Структурные стили .stats-list — здесь, .effects-list — в effects.css. */
+.stats-list {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+}
+/* Характеристики — 4 столбца, два ряда. Из 7 стат естественным потоком
+   получается: ряд 1 = str/vit/dex/spd, ряд 2 = wis/int/luk (4-я ячейка
+   второго ряда пуста). Удача автоматически встаёт справа от Интеллекта
+   и не создаёт отдельного третьего ряда — нижняя панель за счёт этого
+   остаётся низкой. */
+.stats-list {
+  display: grid;
+  /* auto-колонки, а не 1fr — иначе ячейки раздуваются по ширине секции
+     и между «иконка+цифра» соседних пар появляется пустой зазор,
+     не контролируемый через column-gap. */
+  grid-template-columns: repeat(4, auto);
+  justify-content: start;
+  column-gap: 2px;
+  row-gap: 0;
+}
+.stats-list .stat-cell {
+  display: flex; align-items: center; gap: 2px;
+  padding: 0 2px;           /* по вертикали — 0, чтобы ряды стат прилегали плотно */
+  cursor: default;          /* чтобы курсор вешался именно на ячейку — подсказка title берёт hover-область */
+}
+/* Иконки стат — 74×74px (+10% к прежним 67px, итого ~+32% от
+   базовых 56px ячеек слотов; пиксель-арт окончательно стал чётко
+   читаемым). Ячейки навыков и экипировки остаются 56px — стат-иконки
+   заметно крупнее ради разборчивости. Раньше прыгали через 130 → 48
+   → 56 → 67 → 74 — теперь финальный размер. Блок `.stat-emoji` —
+   fallback-ветка для возможных эмодзи-плейсхолдеров, размер
+   пропорционален. */
+.stats-list .stat-icon {
+  width: 74px; height: 74px;
+  image-rendering: pixelated;
+  display: block;
+  flex: 0 0 74px;
+}
+.stats-list .stat-emoji {
+  width: 51px; height: 51px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 42px; line-height: 1;
+  flex: 0 0 51px;
+}
+.stats-list .stat-value {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-size: 19px;
+  font-weight: 600;
+}
+/* Если на стате висит дебафф (итог < базы) — значение красное;
+   если бафф (итог > базы) — зелёное. Без эффектов — обычный цвет. */
+.stats-list .stat-value.stat-debuffed { color: #ff6b6b; }
+.stats-list .stat-value.stat-buffed   { color: #6bdc7a; }
+
+.placeholder-panel {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 60px; color: var(--text-dim); font-style: italic;
+}
+
+
+/* === Кулдауны (Сессия 17) =========================================
+   Слот навыка «на откате» (см. render-panel.js → onCooldown). Лёгкий
+   синеватый оттенок поверх обычного used/no-mana — визуально отличить
+   причину «нельзя кастовать». Тултип уже содержит «(на откате: N ход(ов))»,
+   так что числа на самом слоте не дублируем. */
+.bottom .slots .slot.cooldown-locked {
+  filter: grayscale(0.5) brightness(0.75);
+  box-shadow: inset 0 0 0 2px rgba(80, 140, 200, 0.55);
+  cursor: default;
+}
+.bottom .slots .slot.cooldown-locked img {
+  opacity: 0.55;
+}
+
+
+/* === Однократное использование за волну (Сессия 19) ===============
+   Слот для скиллов с onceWave:true (Второе дыхание) после применения.
+   Тёмно-серый оттенок, на манер cooldown-locked, но без синей рамки —
+   игрок поймёт по тултипу «(уже использовано в этой волне)». */
+.bottom .slots .slot.wave-used {
+  filter: grayscale(0.7) brightness(0.65);
+  cursor: default;
+}
+.bottom .slots .slot.wave-used img {
+  opacity: 0.45;
+}

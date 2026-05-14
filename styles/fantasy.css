@@ -1,0 +1,957 @@
+/* fantasy.css — фентези-визуал поверх базовых стилей.
+   Подключается ПОСЛЕДНИМ. Активен через атрибут [data-theme] на <html>:
+     • data-theme="codex"  — пергаментный D&D / BG; чернила, рукописное.
+     • data-theme="hearth" — тёплый дуб + золото, резные рамы W3-стиля.
+   Раскладку не трогаем — только заливки, рамки, типографика, шкалы,
+   декор. Идея: «не игра-окошко, а интерфейс магического кодекса».
+
+   Структура:
+     1. Общие переменные обеих тем
+     2. Шрифты + базовый текст
+     3. Декоративные SVG-фоны (data-uri) — отдельные блоки констант
+     4. Кадр арены (виньетка по краям)
+     5. Панели: bottom, portrait, log, initiative — резные рамы
+     6. Кнопки действий (крупные, иконические)
+     7. Слоты скиллов/экипировки (выпуклые, glow)
+     8. Шкалы HP / Mana (резная рама + градиент + риски)
+     9. Свиток инициативы
+    10. Лог-пергамент
+    11. Game-over — стилизованный экран
+    12. Переключатель темы (UI)
+    13. Тема CODEX (пергамент)
+    14. Тема HEARTH (дуб + золото)
+*/
+
+/* ====================== 1. ОБЩЕЕ ====================== */
+html[data-theme] body {
+  /* Фон арены — тёплое полотно средней яркости, с лёгкой неоднородностью.
+     Поверх — два «факельных» пятна по углам и тонкое зерно (через ::before).
+     Палитра поднята на 2 ступени светлее по сравнению с первой версией,
+     чтобы UI читался на нём, не сливаясь в тёмный кисель. */
+  background:
+    radial-gradient(ellipse 60% 40% at 8% 100%, rgba(220, 150, 70, 0.22), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 92% 0%, rgba(230, 180, 90, 0.14), transparent 65%),
+    radial-gradient(ellipse 100% 80% at 50% 50%, #3a2a1c 0%, #1f140d 100%);
+  color: var(--ft-text);
+  font-family: var(--ft-font-body);
+  position: relative;
+}
+/* Зернистая шумовая текстура поверх всего фона — тонкий слой,
+   создающий ощущение «бумаги/тиснения». Делается через SVG noise. */
+html[data-theme] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.6  0 0 0 0 0.5  0 0 0 0 0.35  0 0 0 0.42 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+}
+/* Виньетка по углам — лёгкая, чтобы не глушить тёплый дуб. */
+html[data-theme] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(ellipse 95% 80% at 50% 50%, transparent 60%, rgba(0,0,0,0.40) 100%);
+}
+html[data-theme] .arena { position: relative; z-index: 2; }
+
+/* ====================== 2. ШРИФТЫ ====================== */
+:root {
+  --ft-font-display: 'Cinzel', 'Cormorant Garamond', 'Times New Roman', serif;
+  --ft-font-body: 'IM Fell English', 'Cormorant Garamond', 'Georgia', serif;
+  --ft-font-script: 'IM Fell English SC', 'Cinzel', serif;
+}
+
+html[data-theme] {
+  font-family: var(--ft-font-body);
+  font-size: 14px;
+}
+
+html[data-theme] .section-title,
+html[data-theme] .log-panel .log-title,
+html[data-theme] .initiative-strip .title {
+  font-family: var(--ft-font-display);
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Чтобы цифры HP/мана/статов оставались чёткими и не «прыгали»
+   в рукописном шрифте, используем отдельный numeric-fallback. */
+html[data-theme] .bar .value,
+html[data-theme] .stats-list .stat-value,
+html[data-theme] .zoom-indicator,
+html[data-theme] .ini-chip .order-badge,
+html[data-theme] .effect-chip .duration-badge {
+  font-family: 'Cinzel', 'Times New Roman', serif;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ====================== 3. ОБЩАЯ РАМА «ПАНЕЛИ» ======================
+   Все основные коробки UI получают одинаковую трактовку:
+   — двойная рамка (внешняя тёмная + внутренняя светлая «фаска»),
+   — золотые «гвозди»-точки по углам через ::before,
+   — внутренняя тень, имитирующая углубление.
+   Используем CSS-переменные --ft-frame-* — каждая тема их переопределяет.
+*/
+html[data-theme] .bottom,
+html[data-theme] .log-panel,
+html[data-theme] .initiative-strip,
+html[data-theme] .portrait-panel {
+  /* С24-рефактор: убрано `position: relative` отсюда. Раньше оно
+     перекрывало `position: absolute` из panel.css для .portrait-panel,
+     заодно портрет «выпадал» в нормальный поток viewport-а и оказывался
+     в левом верхнем углу. Теперь panel.css владеет позицией портрета
+     явно, fantasy-слой стилизует только визуал (текстура, рамка). */
+  background: var(--ft-panel-bg);
+  border: 2px solid var(--ft-frame-outer);
+  border-radius: 8px;
+  box-shadow:
+    inset 0 0 0 1px var(--ft-frame-inner),
+    inset 0 0 12px rgba(0, 0, 0, 0.35),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+  /* поверх кладём «лист» текстуры через background-image */
+  background-image: var(--ft-panel-texture), var(--ft-panel-bg-fallback);
+  background-blend-mode: multiply;
+  background-size: cover, cover;
+}
+
+/* Декоративные углы — четыре маленьких ромба-«заклёпки». */
+html[data-theme] .bottom::before,
+html[data-theme] .log-panel::before,
+html[data-theme] .initiative-strip::before,
+html[data-theme] .portrait-panel::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  pointer-events: none;
+  border-radius: 5px;
+  /* радиальные «гвозди» по углам через background image (4 точки) */
+  background-image:
+    radial-gradient(circle at 0 0, var(--ft-stud) 0 3px, transparent 4px),
+    radial-gradient(circle at 100% 0, var(--ft-stud) 0 3px, transparent 4px),
+    radial-gradient(circle at 0 100%, var(--ft-stud) 0 3px, transparent 4px),
+    radial-gradient(circle at 100% 100%, var(--ft-stud) 0 3px, transparent 4px);
+  background-size: 14px 14px;
+  background-position: 0 0, 100% 0, 0 100%, 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* ====================== 4. ЗАГОЛОВКИ СЕКЦИЙ ====================== */
+html[data-theme] .bottom .section-title {
+  font-size: 11px;
+  color: var(--ft-accent);
+  text-shadow: 0 1px 0 #000, 0 0 8px rgba(0, 0, 0, 0.6);
+  /* лёгкая «гравировка» через подложку */
+  position: relative;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--ft-divider);
+  margin-bottom: 4px;
+}
+
+/* ====================== 5. ВИДЖИЕТ ВЬЮПОРТА ====================== */
+html[data-theme] .viewport {
+  border: 3px solid var(--ft-frame-outer);
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 0 1px var(--ft-frame-inner),
+    inset 0 0 60px rgba(0, 0, 0, 0.7),
+    0 6px 20px rgba(0, 0, 0, 0.6);
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 50%, rgba(40, 26, 16, 0.0) 0%, rgba(0, 0, 0, 0.6) 100%),
+    #0a0806;
+}
+
+/* Клетки сетки — после внедрения травяного тайла (см. board.css)
+   шахматное чередование .even/.odd удалено: каждая клетка получает
+   свой травяной фон. Здесь только переопределение бордеров (тонкая
+   полупрозрачная сетка поверх травы). НЕ ставим shorthand background
+   на клетки — он сбрасывает background-image из board.css в initial,
+   и трава пропадает (был «чёрный экран» 03.05.2026). Используем
+   background-color: transparent — он целит ТОЛЬКО в цвет, картинку
+   не трогает. Специфичность html[data-theme] .cell.even/.odd выше,
+   чем .cell в board.css, поэтому именно эти селекторы должны быть
+   аккуратны с shorthand-свойствами. */
+html[data-theme] .cell.even,
+html[data-theme] .cell.odd { background-color: transparent; }
+html[data-theme] .cell {
+  border-right: 1px solid rgba(0, 0, 0, 0.45);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.45);
+}
+
+html[data-theme] .zoom-btn {
+  background: var(--ft-button-bg);
+  border: 1px solid var(--ft-frame-outer);
+  color: var(--ft-text);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.15),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+}
+html[data-theme] .zoom-btn:hover {
+  background: var(--ft-button-bg-hover);
+  border-color: var(--ft-accent);
+  color: var(--ft-accent);
+}
+html[data-theme] .zoom-indicator {
+  background: var(--ft-button-bg);
+  border: 1px solid var(--ft-frame-outer);
+  color: var(--ft-accent);
+}
+html[data-theme] .view-hint {
+  font-family: var(--ft-font-body);
+  background: rgba(20, 14, 10, 0.7);
+  color: var(--ft-text-dim);
+  border: 1px solid var(--ft-frame-outer);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-style: italic;
+}
+
+/* C24: переключатель скорости анимаций — единый стиль с .zoom-btn,
+   но с акцентом активной кнопки. */
+html[data-theme] .speed-controls {
+  background: var(--ft-button-bg);
+  border: 1px solid var(--ft-frame-outer);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+html[data-theme] .speed-controls .speed-label {
+  font-family: var(--ft-font-body);
+  color: var(--ft-text-dim);
+  font-style: italic;
+  letter-spacing: 1.2px;
+}
+html[data-theme] .speed-btn {
+  background: var(--ft-button-bg);
+  border: 1px solid var(--ft-frame-outer);
+  color: var(--ft-text);
+  border-radius: 3px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.15),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+  font-family: var(--ft-font-body);
+}
+html[data-theme] .speed-btn:hover {
+  background: var(--ft-button-bg-hover);
+  border-color: var(--ft-accent);
+  color: var(--ft-accent);
+}
+html[data-theme] .speed-btn.active {
+  background: var(--ft-accent);
+  color: #1a1410;
+  border-color: var(--ft-accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 0 6px rgba(255, 220, 160, 0.35);
+  font-weight: 700;
+}
+
+/* ====================== 6. ПОРТРЕТНАЯ ПАНЕЛЬ ====================== */
+html[data-theme] .portrait-panel {
+  width: 230px;
+  height: auto;
+  padding: 12px 12px 14px;
+  gap: 8px;
+}
+html[data-theme] .portrait {
+  width: 86px; height: 86px;
+  border-width: 3px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 220, 160, 0.18), transparent 60%),
+    #0e0a07;
+  box-shadow:
+    inset 0 0 0 1px var(--ft-frame-inner),
+    inset 0 0 12px rgba(0, 0, 0, 0.6),
+    0 0 0 3px rgba(0, 0, 0, 0.5);
+  border-radius: 6px;
+  position: relative;
+}
+/* Декор «солнечных лучей» вокруг портрета — едва заметный glow. */
+html[data-theme] .portrait::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, transparent 55%, rgba(214, 168, 80, 0.10) 70%, transparent 80%);
+  pointer-events: none;
+}
+html[data-theme] .portrait-info .name {
+  font-family: var(--ft-font-display);
+  font-size: 14px;
+  color: var(--ft-accent);
+  letter-spacing: 1px;
+  text-shadow: 0 1px 0 #000;
+}
+html[data-theme] .portrait-info .team-label {
+  font-style: italic;
+  color: var(--ft-text-dim);
+  letter-spacing: 0.5px;
+}
+
+/* Мини-бейдж уровня в имени — превращаем в герб-щиток. */
+html[data-theme] .portrait-info .lvl-badge {
+  display: inline-block;
+  font-family: var(--ft-font-display);
+  font-size: 10px;
+  letter-spacing: 1px;
+  background: linear-gradient(180deg, var(--ft-accent) 0%, #8a6a30 100%);
+  color: #1a1208;
+  padding: 1px 7px 2px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 200, 0.4), 0 1px 2px rgba(0, 0, 0, 0.6);
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* ====================== 7. ШКАЛЫ HP / MANA ======================
+   Резная рама с градиентом — как куски металла, в которые врезана
+   стеклянная капсула с жидкостью.
+   Структура: .bar — flex-строка с лейблом и значением; в DOM нет
+   ::before/::after для самой шкалы, поэтому делаем её через границу
+   и градиентный фон самой .bar.
+   Чтобы шкала была видна, мы превращаем всю .bar в горизонтальную
+   плашку: лейбл слева, значение справа, фон — это сама шкала
+   (определяется CSS-переменной --ft-fill, которую установит JS позже,
+   а сейчас на статике — фиксированная заливка по слову HP/Mana).
+   Для МVP оставим визуальную «рамку» без живого процента — хитрая
+   часть в JS, а UI у нас уже передаёт hp/maxHp текстом. */
+html[data-theme] .portrait-panel .bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  margin: 0 0 3px 0;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.65)),
+    var(--ft-panel-bg-fallback);
+  border: 1px solid var(--ft-frame-outer);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.7),
+    inset 0 0 6px rgba(0, 0, 0, 0.45);
+  font-size: 11px;
+  height: 22px;
+  /* Дефолт — полная заливка, если JS не передал процент.
+     Хранится как безразмерная доля 0..1 (НЕ %), чтобы умножение
+     на пиксельную длину в calc() работало корректно. */
+  --ft-bar-pct: 1;
+}
+html[data-theme] .portrait-panel .bar .label {
+  font-family: var(--ft-font-display);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-align: left;
+  text-shadow: 0 1px 0 #000;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  flex: 0 0 48px;
+  /* Фиксированная ширина — чтобы шкалы HP и Mana были одинаковой длины
+     независимо от длины слова в лейбле («HP» vs «Мана»). */
+}
+/* «Тоннель» шкалы — flex:1 элемент между лейблом и значением.
+   В DOM его нет, поэтому используем .value::before? Нет — лучше
+   ставим жидкость как ::before на самом .bar, занимая середину
+   через flex-spacer.
+   Технически: между .label и .value добавим CSS-only трек. */
+html[data-theme] .portrait-panel .bar::before {
+  content: '';
+  flex: 1 1 auto;
+  height: calc(100% - 8px);
+  margin: 0;
+  border-radius: 2px;
+  background: linear-gradient(to right,
+    var(--ft-bar-fill-color, #888) 0%,
+    var(--ft-bar-fill-color, #888) calc(var(--ft-bar-pct) * 100%),
+    rgba(0, 0, 0, 0.55) calc(var(--ft-bar-pct) * 100%),
+    rgba(0, 0, 0, 0.55) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  position: relative;
+  transition: background 0.28s ease-out;
+}
+/* Стеклянный блик поверх всей трубы */
+html[data-theme] .portrait-panel .bar::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  /* Этот блик пускаем поверх ::before — берём геометрию через
+     left/right, привязываясь к flex-расположению. left/right
+     рассчитаются JS-дешёвым способом — но проще растянуть на всю
+     внутреннюю часть и обрезать через ::before нельзя.
+     Альтернатива — сделать ::after внутри ::before, что невозможно.
+     Решение: нет, оставим без блика — хватит градиента. */
+  display: none;
+}
+html[data-theme] .portrait-panel .bar .value {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff8de;
+  text-shadow: 0 1px 0 #000;
+  z-index: 2;
+  line-height: 1;
+  flex: 0 0 auto;
+  min-width: 56px;
+}
+/* Цвет жидкости — задаём CSS-переменной, чтобы её взял градиент ::before */
+html[data-theme] .portrait-panel .bar:has(.hp-label) {
+  --ft-bar-fill-color: #cc3a30;
+}
+html[data-theme] .portrait-panel .bar:has(.mana-label) {
+  --ft-bar-fill-color: #4a8ad8;
+}
+html[data-theme] .portrait-panel .bar:has(.hp-label) {
+  --ft-bar-fill: linear-gradient(180deg, #d8483a 0%, #8a1d18 100%);
+}
+html[data-theme] .portrait-panel .bar:has(.mana-label) {
+  --ft-bar-fill: linear-gradient(180deg, #5b9eea 0%, #1f4790 100%);
+}
+/* Иконка перед лейблом — маленькая капля HP / звезда Mana. */
+html[data-theme] .portrait-panel .bar .label::before {
+  content: '';
+  display: inline-block;
+  width: 11px; height: 11px;
+  margin-right: 4px;
+  flex-shrink: 0;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+html[data-theme] .portrait-panel .bar .hp-label::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M8 14C5 11 2 8.5 2 5.5A3.5 3.5 0 0 1 8 3a3.5 3.5 0 0 1 6 2.5C14 8.5 11 11 8 14Z' fill='%23d04438' stroke='%23000' stroke-width='1.2'/></svg>");
+}
+html[data-theme] .portrait-panel .bar .mana-label::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M8 1 9.5 6 14 8 9.5 10 8 15 6.5 10 2 8 6.5 6Z' fill='%234c7cc4' stroke='%23000' stroke-width='1.1'/></svg>");
+}
+
+/* ====================== 8. КНОПКИ ДЕЙСТВИЙ ======================
+   Делаем крупные иконические кнопки с собственной иконкой слева и
+   подписью справа. Иконки — inline SVG через background.
+   Применяется только к кнопкам в .action-buttons, чтобы не задеть
+   .restart-btn и т.д. */
+html[data-theme] .action-buttons .btn {
+  font-family: var(--ft-font-display);
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 10px 12px 10px 44px;
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 220, 160, 0.06) 0%, rgba(0, 0, 0, 0.45) 100%),
+    var(--ft-button-bg);
+  border: 2px solid var(--ft-frame-outer);
+  border-radius: 5px;
+  color: var(--ft-text);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.7),
+    0 2px 4px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 0 #000;
+  transition: all 140ms ease;
+  cursor: pointer;
+}
+html[data-theme] .action-buttons .btn:hover:not(:disabled) {
+  border-color: var(--ft-accent);
+  color: var(--ft-accent);
+  background:
+    linear-gradient(180deg, rgba(255, 220, 160, 0.15) 0%, rgba(40, 26, 14, 0.7) 100%),
+    var(--ft-button-bg-hover);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.7),
+    0 4px 10px rgba(0, 0, 0, 0.5),
+    0 0 14px rgba(214, 168, 80, 0.35);
+}
+html[data-theme] .action-buttons .btn.primary {
+  border-color: var(--ft-accent);
+  color: var(--ft-accent);
+}
+html[data-theme] .action-buttons .btn.mode-active {
+  background:
+    linear-gradient(180deg, rgba(255, 220, 160, 0.28) 0%, rgba(80, 40, 14, 0.6) 100%),
+    var(--ft-button-bg-hover);
+  border-color: var(--ft-accent);
+  color: #fff7d6;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.5),
+    inset 0 0 12px rgba(214, 168, 80, 0.4),
+    0 0 16px rgba(214, 168, 80, 0.45);
+}
+html[data-theme] .action-buttons .btn.action-used {
+  opacity: 0.35;
+  filter: grayscale(0.6);
+}
+/* Иконка слева — рисуется через ::before, разная по data-action */
+html[data-theme] .action-buttons .btn::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px; height: 28px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  filter: drop-shadow(0 1px 0 #000) drop-shadow(0 0 4px rgba(214, 168, 80, 0.5));
+}
+html[data-theme] .action-buttons .btn[data-action="attack"]::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><g fill='none' stroke='%23e8c878' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M5 27 22 10' stroke='%23d8c8a0' stroke-width='2.4'/><path d='M22 10 26 6 28 4 26 8 24 12Z' fill='%23e8c878' stroke='%23000'/><path d='M5 27 9 25 7 23Z' fill='%23a86040' stroke='%23000'/><path d='M19 13 22 16' stroke='%23000'/></g></svg>");
+}
+html[data-theme] .action-buttons .btn[data-action="move"]::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><g fill='none' stroke='%23e8c878' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 3v26M3 16h26' /><path d='M16 3 12 8M16 3 20 8M16 29 12 24M16 29 20 24M3 16 8 12M3 16 8 20M29 16 24 12M29 16 24 20' /></g></svg>");
+}
+html[data-theme] .action-buttons .btn[data-action="end"]::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><g fill='none' stroke='%23e8c878' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='16' cy='16' r='11'/><path d='M16 9v7l5 3'/></g></svg>");
+}
+
+/* ====================== 9. СЛОТЫ СКИЛЛОВ / ЭКИПИРОВКИ ====================== */
+html[data-theme] .slots,
+html[data-theme] .equipment-slots {
+  grid-template-columns: repeat(4, 60px);
+  gap: 6px;
+}
+html[data-theme] .equipment-slots { grid-template-columns: repeat(5, 60px); }
+
+html[data-theme] .slot {
+  background:
+    radial-gradient(circle at 50% 25%, rgba(255, 220, 160, 0.10) 0%, transparent 60%),
+    linear-gradient(180deg, #1a1208 0%, #07050355 100%);
+  border: 2px solid var(--ft-frame-outer);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.15),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.7),
+    inset 0 0 8px rgba(0, 0, 0, 0.5);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+html[data-theme] .slot.filled {
+  border-color: var(--ft-accent-dim);
+}
+/* Hover для активных слотов скиллов: выпуклость + glow.
+   Это и есть ключевой запрошенный эффект. */
+html[data-theme] .slot.skill-active:hover {
+  transform: translateY(-2px) scale(1.04);
+  border-color: var(--ft-accent);
+  background:
+    radial-gradient(circle at 50% 25%, rgba(255, 220, 160, 0.25) 0%, transparent 65%),
+    linear-gradient(180deg, #2a1a08 0%, #150a04 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.4),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(214, 168, 80, 0.7),
+    0 4px 10px rgba(0, 0, 0, 0.6);
+}
+html[data-theme] .slot.skill-active:hover img {
+  filter: drop-shadow(0 0 6px rgba(255, 220, 140, 0.85));
+}
+/* Активный режим — постоянное свечение */
+html[data-theme] .slot.skill-active.mode-on {
+  border-color: var(--ft-fire);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 140, 60, 0.35) 0%, transparent 65%),
+    #2a1408;
+  box-shadow:
+    inset 0 0 14px rgba(255, 140, 60, 0.45),
+    0 0 18px rgba(255, 140, 60, 0.65);
+  animation: ft-skill-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ft-skill-pulse {
+  0%, 100% { box-shadow: inset 0 0 14px rgba(255, 140, 60, 0.45), 0 0 18px rgba(255, 140, 60, 0.55); }
+  50%      { box-shadow: inset 0 0 20px rgba(255, 160, 80, 0.6),  0 0 26px rgba(255, 160, 80, 0.85); }
+}
+
+/* ────── Недоступный активный навык: десатурация в серый ──────
+   Слот считается "недоступным", если на нём есть data-skill-id, но
+   нет класса .skill-active (значит canCast=false: не его ход, нет
+   маны, использован, или герой обездвижен).
+   В отличие от opacity 0.4 в panel.css — здесь именно "обесцвечиваем"
+   иконку: grayscale + слегка приглушаем яркость. Это даёт чёткий
+   читаемый сигнал «нельзя» без потери силуэта.
+
+   :not(.skill-active):not(.mode-on) — чтобы не задеть активные. */
+html[data-theme] .bottom .slot.filled[data-skill-id]:not(.skill-active):not(.mode-on) img {
+  filter: grayscale(1) brightness(0.65) contrast(0.9);
+  transition: filter 160ms ease-out;
+}
+html[data-theme] .bottom .slot.filled[data-skill-id]:not(.skill-active):not(.mode-on) {
+  /* Сама плашка тоже чуть холоднее и тусклее — становится «выключенной» */
+  background:
+    radial-gradient(circle at 50% 30%, rgba(120, 110, 100, 0.10) 0%, transparent 60%),
+    linear-gradient(180deg, #2a2520 0%, #1a1612 100%);
+  border-color: #3a2e22;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.04),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 0 8px rgba(0, 0, 0, 0.45);
+}
+/* Пере­крывает opacity 0.4 из panel.css для used/no-mana — теперь видно
+   серую иконку чётко, а не «тусклое пятно». */
+html[data-theme] .bottom .slot.skill-active.used,
+html[data-theme] .bottom .slot.skill-active.no-mana {
+  opacity: 1;
+}
+html[data-theme] .bottom .slot.skill-active.used img,
+html[data-theme] .bottom .slot.skill-active.no-mana img {
+  filter: grayscale(1) brightness(0.65) contrast(0.9);
+}
+/* Перечёркивание «used» оставляем, но делаем его более явным */
+html[data-theme] .bottom .slot.skill-active.used {
+  text-decoration: none; /* line-through на слоте без текста бесполезно */
+  position: relative;
+}
+html[data-theme] .bottom .slot.skill-active.used::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  background:
+    linear-gradient(135deg, transparent 46%, rgba(0, 0, 0, 0.55) 48%, rgba(0, 0, 0, 0.55) 52%, transparent 54%);
+  pointer-events: none;
+}
+
+/* Слот-эмодзи / иконки-fallback (для пустых слотов экипировки) */
+html[data-theme] .equipment-slots .slot {
+  font-size: 22px;
+  color: var(--ft-text-dim);
+}
+
+/* ====================== 10. СВИТОК ИНИЦИАТИВЫ ====================== */
+html[data-theme] .initiative-strip {
+  width: 86px;
+  padding: 14px 8px 18px;
+  position: relative;
+  /* «свиток» — суженные верх/низ, скруглённые валики */
+  border-radius: 8px 8px 8px 8px;
+}
+/* Деревянные валики свитка сверху и снизу. */
+html[data-theme] .initiative-strip::after {
+  content: '';
+  position: absolute;
+  left: -6px; right: -6px;
+  height: 14px;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, #5a3a1c 0%, #2a1808 100%);
+  border: 2px solid var(--ft-frame-outer);
+  border-radius: 7px;
+  box-shadow: inset 0 1px 0 rgba(255, 220, 160, 0.2), 0 2px 4px rgba(0,0,0,0.5);
+  top: -8px;
+}
+/* Нижний валик — отдельный псевдо у дочерних — невозможно. Делаем
+   его через .initiative-list ::after, ниже. */
+html[data-theme] .initiative-strip .initiative-list {
+  position: relative;
+}
+html[data-theme] .initiative-strip .initiative-list::after {
+  content: '';
+  position: absolute;
+  left: -14px; right: -14px;
+  bottom: -22px;
+  height: 14px;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, #5a3a1c 0%, #2a1808 100%);
+  border: 2px solid var(--ft-frame-outer);
+  border-radius: 7px;
+  box-shadow: inset 0 1px 0 rgba(255, 220, 160, 0.2), 0 2px 4px rgba(0,0,0,0.5);
+}
+html[data-theme] .initiative-strip .title {
+  font-family: var(--ft-font-display);
+  font-size: 10px;
+  color: var(--ft-accent);
+  text-shadow: 0 1px 0 #000;
+}
+html[data-theme] .round-indicator {
+  background: linear-gradient(180deg, var(--ft-accent) 0%, #8a6a30 100%);
+  color: #1a1208 !important;
+  border: 1px solid rgba(0,0,0,0.6);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 200, 0.4);
+  padding: 2px 8px;
+}
+
+/* Чипы инициативы — квадратные с лёгким скруглением, чтобы перекликаться
+   со слотами скиллов на нижней панели. Кольцо-команда остаётся через
+   border-color из базовых стилей. */
+html[data-theme] .ini-chip {
+  width: 56px; height: 56px;
+  border-width: 3px;
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 220, 160, 0.18) 0%, transparent 60%),
+    #100a05;
+  box-shadow:
+    inset 0 0 0 1px var(--ft-frame-inner),
+    inset 0 0 8px rgba(0,0,0,0.7),
+    0 2px 4px rgba(0,0,0,0.5);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+html[data-theme] .ini-chip:hover {
+  transform: scale(1.08);
+  box-shadow:
+    inset 0 0 0 1px var(--ft-frame-inner),
+    inset 0 0 8px rgba(0,0,0,0.6),
+    0 0 14px rgba(214, 168, 80, 0.5);
+}
+html[data-theme] .ini-chip.acting {
+  box-shadow:
+    inset 0 0 0 1px var(--ft-frame-inner),
+    0 0 0 3px var(--ft-acting),
+    0 0 18px var(--ft-acting);
+}
+html[data-theme] .ini-chip .order-badge {
+  width: 18px; height: 18px;
+  font-size: 11px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--ft-accent) 0%, #6a4818 100%);
+  color: #1a1208;
+  border: 1px solid #000;
+  box-shadow: inset 0 1px 0 rgba(255, 240, 200, 0.45), 0 1px 2px rgba(0,0,0,0.6);
+}
+
+/* ====================== 11. ЛОГ-ПЕРГАМЕНТ ====================== */
+html[data-theme] .log-panel {
+  font-family: var(--ft-font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  padding: 12px 16px 14px 18px;
+  max-height: 130px;
+  /* Пергаментный фон поверх общей рамы */
+  background:
+    radial-gradient(ellipse 70% 100% at 50% 50%, rgba(238, 210, 156, 0.85) 0%, rgba(208, 174, 116, 0.75) 70%, rgba(166, 130, 80, 0.7) 100%),
+    var(--ft-panel-bg-fallback);
+  background-blend-mode: normal;
+  color: #2a1a0c;
+  border: 2px solid var(--ft-frame-outer);
+  box-shadow:
+    inset 0 0 0 1px rgba(106, 70, 32, 0.6),
+    inset 0 0 24px rgba(120, 70, 30, 0.45),
+    inset 0 0 60px rgba(60, 30, 12, 0.35),
+    0 4px 14px rgba(0, 0, 0, 0.55);
+}
+/* Подложка пергамента — тонкие «сгибы» через линейный градиент. */
+html[data-theme] .log-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, transparent 0, rgba(106, 70, 32, 0.10) 1px, transparent 2px) 0 0/120px 100%,
+    radial-gradient(ellipse at 0% 50%, rgba(60, 30, 10, 0.18), transparent 30%),
+    radial-gradient(ellipse at 100% 50%, rgba(60, 30, 10, 0.18), transparent 30%);
+  mix-blend-mode: multiply;
+  opacity: 0.7;
+}
+html[data-theme] .log-panel .log-title {
+  font-size: 11px;
+  color: #6a3a18;
+  letter-spacing: 3px;
+  margin-bottom: 6px;
+  border-bottom: 1px dashed rgba(106, 70, 32, 0.55);
+  padding-bottom: 4px;
+}
+html[data-theme] .log-entry { color: #3a2410; }
+html[data-theme] .log-entry.system { color: #7a5630; font-style: italic; }
+html[data-theme] .log-entry.damage { color: #8a2a18; }
+html[data-theme] .log-entry.death  { color: #6a1208; font-weight: 700; }
+html[data-theme] .log-entry.crit   { color: #a56a08; font-weight: 700; }
+html[data-theme] .log-entry.turn   { color: #5a3818; font-weight: 700; }
+html[data-theme] .log-entry.victory{ color: #2a5a18; font-weight: 700; }
+html[data-theme] .log-entry .tag   { color: #7a5430; }
+
+/* ====================== 12. GAME-OVER ====================== */
+html[data-theme] .game-over-overlay {
+  background:
+    radial-gradient(ellipse 60% 60% at 50% 50%, rgba(40, 20, 10, 0.85) 0%, rgba(0, 0, 0, 0.95) 100%);
+}
+html[data-theme] .game-over-overlay .victory-title {
+  font-family: var(--ft-font-display);
+  font-size: 44px;
+  letter-spacing: 4px;
+  color: var(--ft-accent);
+  text-shadow:
+    0 2px 0 #000,
+    0 0 18px rgba(214, 168, 80, 0.5);
+}
+html[data-theme] .game-over-overlay .victory-sub {
+  font-family: var(--ft-font-body);
+  font-style: italic;
+  font-size: 16px;
+  color: var(--ft-text-dim);
+}
+html[data-theme] .game-over-overlay .restart-btn {
+  font-family: var(--ft-font-display);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 12px 28px;
+  background: linear-gradient(180deg, var(--ft-button-bg-hover), var(--ft-button-bg));
+  border: 2px solid var(--ft-accent);
+  color: var(--ft-accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(214, 168, 80, 0.35);
+}
+
+/* ====================== 13. ХАРАКТЕРИСТИКИ ====================== */
+html[data-theme] .stats-list .stat-cell {
+  /* лёгкое углубление под пару иконка+число */
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+html[data-theme] .stats-list .stat-cell:hover {
+  background: rgba(214, 168, 80, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(214, 168, 80, 0.3);
+}
+html[data-theme] .stats-list .stat-value {
+  color: #f4dca4;
+  font-weight: 700;
+  text-shadow: 0 1px 0 #000;
+}
+/* Подсветка изменённых характеристик (Сессия 18 правка):
+   - выше базы → зелёный (бафф)
+   - ниже базы → красный (дебафф)
+   - равно базе → стандартный золотистый (без override)
+   Те же цвета, что в panel.css, но с html[data-theme]-префиксом для
+   достаточной специфичности — иначе fantasy-правило выше затирало бы
+   их обратно в #f4dca4. */
+html[data-theme] .stats-list .stat-value.stat-buffed {
+  color: #88f098;
+  text-shadow: 0 0 6px rgba(60, 200, 90, 0.55), 0 1px 0 #000;
+}
+html[data-theme] .stats-list .stat-value.stat-debuffed {
+  color: #ff7a7a;
+  text-shadow: 0 0 6px rgba(220, 60, 60, 0.55), 0 1px 0 #000;
+}
+
+/* ====================== 14. ЧИП ЭФФЕКТА ====================== */
+html[data-theme] .effect-chip {
+  background:
+    radial-gradient(circle at 50% 25%, rgba(255, 220, 160, 0.10) 0%, transparent 60%),
+    #0e0a05;
+  border: 2px solid var(--ft-frame-outer);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.15),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.7);
+}
+html[data-theme] .effect-chip .duration-badge {
+  background: linear-gradient(180deg, var(--ft-accent) 0%, #8a6a30 100%);
+  color: #1a1208;
+  border: 1px solid #000;
+  box-shadow: inset 0 1px 0 rgba(255, 240, 200, 0.4), 0 1px 2px rgba(0,0,0,0.6);
+}
+
+/* ====================== 15. ПЛЕЙСХОЛДЕР ПАНЕЛИ ====================== */
+html[data-theme] .placeholder-panel {
+  font-family: var(--ft-font-body);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--ft-text-dim);
+  text-align: center;
+}
+
+/* ====================== 16. ПЕРЕКЛЮЧАТЕЛЬ ТЕМЫ (UI) ======================
+   Маленькая «карта» в правом верхнем углу страницы. Две кнопки A/B. */
+.theme-switch {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  gap: 0;
+  background: linear-gradient(180deg, #2a1a0c, #0e0805);
+  border: 2px solid var(--ft-frame-outer, #5a4832);
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.7),
+    0 4px 14px rgba(0, 0, 0, 0.6);
+  padding: 4px;
+  font-family: var(--ft-font-display, 'Cinzel', serif);
+}
+.theme-switch button {
+  background: transparent;
+  color: #d8c9a8;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 7px 16px;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.theme-switch button:hover {
+  color: #f4dca4;
+  background: rgba(214, 168, 80, 0.12);
+}
+.theme-switch button.active {
+  color: #1a1208;
+  background: linear-gradient(180deg, #d6a850 0%, #8a6a30 100%);
+  border-color: rgba(0,0,0,0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 200, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 0 rgba(255, 240, 200, 0.4);
+}
+.theme-switch .label {
+  align-self: center;
+  color: #8a7a5a;
+  font-size: 10px;
+  letter-spacing: 2px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+/* ====================== 17. ТЕМА «HEARTH» (ДУБ + ЗОЛОТО) ====================== */
+html[data-theme="hearth"] {
+  --ft-text: #f3e3b6;
+  --ft-text-dim: #b39e74;
+  --ft-accent: #ecc878;
+  --ft-accent-dim: #c89a48;
+  --ft-fire: #ff9a4c;
+  --ft-acting: #8ee896;
+  --ft-divider: rgba(232, 192, 110, 0.36);
+  --ft-frame-outer: #4a2c14;
+  --ft-frame-inner: rgba(236, 200, 120, 0.55);
+  --ft-stud: #ecc878;
+
+  /* Базовый цвет панелей поднят с #2c1c0e до #4a3220 — это разница в
+     светлоте около +18% L, заметная, но всё ещё «тёмный дуб», не
+     карамель. */
+  --ft-panel-bg-fallback: #4a3220;
+  --ft-panel-bg: #4a3220;
+  /* Дуб светлее: волокна остались, но базовый градиент 5a3a22 → 2a1d12
+     вместо прежнего 341e0e → 1a0f06. Светлые пятна-«узлы» стали ярче. */
+  --ft-panel-texture:
+    repeating-linear-gradient(110deg, rgba(0, 0, 0, 0.0) 0 1px, rgba(0, 0, 0, 0.14) 1px 2px, transparent 2px 6px),
+    repeating-linear-gradient(115deg, rgba(236, 200, 120, 0.0) 0 18px, rgba(236, 200, 120, 0.06) 18px 19px, transparent 19px 30px),
+    radial-gradient(ellipse 40% 60% at 12% 30%, rgba(236, 200, 120, 0.10), transparent 60%),
+    radial-gradient(ellipse 30% 40% at 88% 75%, rgba(236, 200, 120, 0.08), transparent 60%),
+    linear-gradient(180deg, #5a3a22 0%, #2a1d12 100%);
+
+  --ft-button-bg: #4e321a;
+  --ft-button-bg-hover: #62421f;
+
+  --ft-grid-even: #2a1f15;
+  --ft-grid-light: #342718;
+  --ft-grid-odd: #342718;
+}

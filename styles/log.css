@@ -1,0 +1,42 @@
+/* log.css — лог боя под нижней панелью.
+   Что внутри:
+     • .log-panel — контейнер (фон, скролл, max-height).
+     • .log-panel .log-title — заголовок «ЛОГ».
+     • .log-entry — базовый стиль строки + варианты по типу события
+       (.system / .damage / .death / .crit / .turn / .victory).
+     • .log-entry .tag — небольшой префикс-тег (номер хода и т.п.).
+   Что НЕ внутри:
+     • Сам HTML лога и логика добавления строк (это в JS).
+   Где править цвет/выделение конкретного типа события: соответствующее
+     правило .log-entry.<тип>.
+*/
+
+.log-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  max-height: 110px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.log-panel .log-title {
+  font-size: 10px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+.log-entry { color: var(--text); }
+.log-entry.system    { color: var(--text-dim); font-style: italic; }
+.log-entry.damage    { color: #e08a6a; }
+.log-entry.death     { color: #e25c5c; font-weight: 600; }
+.log-entry.crit      { color: #ffdf7a; font-weight: 600; }
+.log-entry.turn      { color: var(--accent); }
+.log-entry.victory   { color: #78e28a; font-weight: 600; }
+.log-entry .tag {
+  display: inline-block;
+  min-width: 20px;
+  color: var(--text-dim);
+  margin-right: 6px;
+  font-variant-numeric: tabular-nums;
+}

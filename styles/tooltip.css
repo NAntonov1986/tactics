@@ -1,0 +1,360 @@
+/* tooltip.css — кастомные тултипы с увеличенной иконкой того, на что
+   наведён курсор. Заменяют нативные browser-title.
+
+   АРХИТЕКТУРА:
+     • В DOM один глобальный контейнер #customTooltip.
+     • Внутри него — крупный preview-блок (.tt-icon — 96×96 px-art) и
+       текстовый блок (.tt-title + .tt-body).
+     • Позиционируется JS'ом возле курсора, со зажиманием в viewport.
+     • Стиль выбирается через атрибут data-tip-style на <html>:
+         "codex"  — пергаментный свиток с лентой-заголовком
+         "forged" — кованая металлическая плашка с заклёпками
+         "sigil"  — стеклянный сигил с золотой каймой и подсветкой
+     • Каждый стиль — отдельный набор селекторов html[data-tip-style="..."]
+       — никаких !important, никаких пересечений.
+
+   Где править размер preview-иконки: .tt-icon (width/height) — общая для всех тем.
+*/
+
+/* ============ БАЗА ============ */
+.custom-tooltip {
+  position: fixed;
+  z-index: 9999;
+  /* По умолчанию скрыт; visible-класс делает видимым. Используем opacity
+     + visibility, чтобы было fade без layout-флика. */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  /* Без transition: на быстром hover между чипами браузер успевает
+     поставить opacity:0 baseline ДО того, как класс .visible добавлен,
+     и анимация остаётся в стадии «0». Простое мгновенное переключение —
+     надёжнее и для UX подсказок ничем не хуже. */
+  max-width: 420px;
+  min-width: 220px;
+  font-family: var(--ft-font-body, system-ui, sans-serif);
+  /* Итерация 2: 15 → 17. Соответственно подяты и дочерние размеры
+     (см. .tt-title / .tt-subtitle / .tt-line). max-width расширен с 380 до 420
+     — иначе длинные строки формул/эффектов становятся в 2 строки. */
+  font-size: 17px;
+  line-height: 1.45;
+  color: #efe2c6;
+  /* Контент: иконка слева, текст справа. На узких подсказках без иконки —
+     просто текст занимает всю ширину. */
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  box-sizing: border-box;
+}
+.custom-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+}
+/* Если иконка не задана — скрываем колонку и сворачиваем grid в один столбец. */
+.custom-tooltip.no-icon {
+  grid-template-columns: 1fr;
+}
+.custom-tooltip.no-icon .tt-icon { display: none; }
+
+/* Крупный preview изображения навыка/оружия/стата. Pixel-art,
+   на чёрной подложке с тонкой рамкой — единый размер для всех тем. */
+.tt-icon {
+  width: 96px;
+  height: 96px;
+  flex: 0 0 96px;
+  background: #0e0a07;
+  border: 1px solid rgba(120, 90, 50, 0.6);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.tt-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* Большинство спрайтов навыков/статов имеют 20-40% прозрачных
+     полей по периметру PNG; без масштабирования контент занимает
+     только центр. scale(1.5) даёт >=90% визуальной площади даже
+     для спрайтов с большими полями; overflow: hidden на .tt-icon
+     подрежет вылет прозрачных краёв. */
+  transform: scale(1.5);
+  transform-origin: center center;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+}
+.tt-icon .tt-emoji {
+  /* 80px на контейнер 96px = ~83% площади; эмодзи рисуется без
+     прозрачных полей, поэтому такого размера достаточно. */
+  font-size: 80px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.8));
+}
+
+.tt-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.tt-title {
+  font-family: var(--ft-font-display, var(--ft-font-body, serif));
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin: 0 0 2px 0;
+  word-wrap: break-word;
+}
+.tt-subtitle {
+  font-size: 13.5px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  opacity: 0.75;
+  margin-bottom: 2px;
+}
+.tt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tt-line {
+  font-size: 16px;
+}
+.tt-line.tt-warn {
+  color: #ffb072;
+  font-style: italic;
+  opacity: 0.95;
+}
+.tt-line.tt-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: currentColor;
+  opacity: 0.18;
+}
+
+/* ============ СТИЛЬ 1: CODEX (ПЕРГАМЕНТ) ============
+   Свёрнутый клочок пергамента: тёплый бежевый фон, тёмные чернила,
+   двойная рамка с зубчатым внутренним краем. Подходит к codex-теме
+   страницы. Заголовок — будто красная рубрика рукописи. */
+html[data-tip-style="codex"] .custom-tooltip {
+  background:
+    radial-gradient(ellipse 90% 70% at 30% 20%, rgba(255, 240, 200, 0.55), transparent 70%),
+    linear-gradient(180deg, #f1deb5 0%, #e2c896 60%, #d4b878 100%);
+  color: #2a1a0c;
+  border: 1px solid #6b4a22;
+  border-radius: 3px;
+  box-shadow:
+    0 0 0 1px rgba(255, 240, 200, 0.4) inset,
+    0 0 0 4px #2a1a0c00,
+    0 8px 22px rgba(0, 0, 0, 0.55),
+    0 2px 0 rgba(255, 240, 200, 0.25) inset;
+}
+html[data-tip-style="codex"] .custom-tooltip::before {
+  /* Зубчатый внутренний кант — имитация неровного края пергамента. */
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px dashed rgba(80, 50, 20, 0.45);
+  border-radius: 2px;
+  pointer-events: none;
+}
+html[data-tip-style="codex"] .tt-icon {
+  background: #f8eccb;
+  border: 1px solid #6b4a22;
+  box-shadow:
+    inset 0 0 0 1px rgba(80, 50, 20, 0.18),
+    inset 0 0 18px rgba(110, 70, 25, 0.25);
+}
+html[data-tip-style="codex"] .tt-title {
+  color: #7a1a10;
+  text-shadow: 0 1px 0 rgba(255, 240, 200, 0.5);
+  font-family: var(--ft-font-display, "Cinzel", serif);
+}
+html[data-tip-style="codex"] .tt-subtitle {
+  color: #5a3a1a;
+}
+html[data-tip-style="codex"] .tt-line {
+  color: #2a1a0c;
+}
+html[data-tip-style="codex"] .tt-line.tt-warn {
+  color: #8a3010;
+}
+html[data-tip-style="codex"] .tt-line.tt-divider {
+  background: #6b4a22;
+  opacity: 0.4;
+}
+
+/* ============ СТИЛЬ 2: FORGED (КОВАНАЯ ПЛАШКА) ============
+   Тёмный металл с тёплым подсветом, золотой штифт-заклёпка по углам,
+   заголовок будто выжжен и подсвечен снизу. Похоже на UI WoW/Diablo. */
+html[data-tip-style="forged"] .custom-tooltip {
+  background:
+    linear-gradient(180deg, #2a1d12 0%, #1a120a 60%, #100a06 100%);
+  color: #efe2c6;
+  border: 1px solid #5a4022;
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 1px #2a1d12 inset,
+    0 0 0 2px #5a4022,
+    0 0 0 3px #2a1d12,
+    0 12px 28px rgba(0, 0, 0, 0.7),
+    0 0 18px rgba(220, 150, 60, 0.18);
+}
+/* Заклёпки по 4 углам — крошечные жёлтые круги. */
+html[data-tip-style="forged"] .custom-tooltip::before,
+html[data-tip-style="forged"] .custom-tooltip::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, #fde0a0 0%, #c89030 60%, #6a4818 100%);
+  box-shadow: 0 0 0 1px #2a1d12;
+  pointer-events: none;
+}
+html[data-tip-style="forged"] .custom-tooltip::before { top: 4px; left: 4px; }
+html[data-tip-style="forged"] .custom-tooltip::after  { bottom: 4px; right: 4px; }
+html[data-tip-style="forged"] .tt-icon {
+  background: #0a0604;
+  border: 1px solid #5a4022;
+  box-shadow:
+    inset 0 0 0 1px #1a120a,
+    inset 0 0 12px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(220, 160, 70, 0.15);
+}
+html[data-tip-style="forged"] .tt-title {
+  color: #f7c469;
+  text-shadow: 0 0 6px rgba(220, 130, 40, 0.5), 0 1px 0 #000;
+  font-family: var(--ft-font-display, "Cinzel", serif);
+  border-bottom: 1px solid rgba(120, 80, 30, 0.6);
+  padding-bottom: 3px;
+}
+html[data-tip-style="forged"] .tt-subtitle {
+  color: #c89060;
+}
+html[data-tip-style="forged"] .tt-line.tt-warn {
+  color: #ffb168;
+}
+html[data-tip-style="forged"] .tt-line.tt-divider {
+  background: #5a4022;
+  opacity: 0.6;
+}
+
+/* ============ СТИЛЬ 3: SIGIL (СТЕКЛЯННАЯ ПЛАСТИНА) ============
+   Полупрозрачная тёмная стеклянная пластина с золотой каймой, лёгкое
+   свечение вокруг. Чище и современнее предыдущих двух — для тех, кому
+   D&D-фактура слишком плотная. */
+html[data-tip-style="sigil"] .custom-tooltip {
+  background:
+    linear-gradient(155deg, rgba(40, 28, 18, 0.92) 0%, rgba(20, 14, 10, 0.95) 100%);
+  color: #f4e8c8;
+  border: 1px solid rgba(220, 170, 90, 0.7);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow:
+    0 0 0 1px rgba(255, 220, 150, 0.08) inset,
+    0 8px 24px rgba(0, 0, 0, 0.55),
+    0 0 28px rgba(220, 170, 90, 0.22);
+}
+/* Тонкая золотая «искра» сверху — лёгкий highlight по верхней грани. */
+html[data-tip-style="sigil"] .custom-tooltip::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 230, 170, 0.7), transparent);
+  pointer-events: none;
+}
+html[data-tip-style="sigil"] .tt-icon {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(220, 170, 90, 0.5);
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 220, 150, 0.06),
+    inset 0 0 16px rgba(0, 0, 0, 0.7),
+    0 0 12px rgba(220, 170, 90, 0.15);
+}
+html[data-tip-style="sigil"] .tt-title {
+  color: #ffd98a;
+  text-shadow: 0 0 8px rgba(220, 170, 80, 0.45);
+  font-family: var(--ft-font-display, "Cinzel", serif);
+  font-weight: 600;
+}
+html[data-tip-style="sigil"] .tt-subtitle {
+  color: rgba(220, 170, 90, 0.8);
+}
+html[data-tip-style="sigil"] .tt-line.tt-warn {
+  color: #ffb072;
+}
+html[data-tip-style="sigil"] .tt-line.tt-divider {
+  background: rgba(220, 170, 90, 0.5);
+  opacity: 0.5;
+}
+
+/* ============ TWEAKS PANEL ============
+   Маленькая плашка в правом нижнем углу — выбор стиля тултипа.
+   Появляется только в режиме Tweaks (toggle в тулбаре). */
+.tooltip-tweaks {
+  position: fixed;
+  /* Правый верхний угол окна — не пересекается ни с инициативой
+     (она внутри workspace, а tweaks — fixed относительно viewport),
+     ни с логом снизу. По высоте опущен на 12 px, чтобы не цепляться
+     за самый край у пользователей без скролл-полосы. */
+  top: 12px;
+  right: 12px;
+  z-index: 8000;
+  background: rgba(20, 14, 10, 0.92);
+  color: #efe2c6;
+  border: 1px solid #5a4022;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: var(--ft-font-body, system-ui, sans-serif);
+  font-size: 12px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6);
+  display: none;          /* скрыт пока не активирован */
+  flex-direction: column;
+  gap: 8px;
+  min-width: 200px;
+}
+.tooltip-tweaks.visible { display: flex; }
+.tooltip-tweaks .tt-tweaks-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: #c89060;
+  margin: 0;
+}
+.tooltip-tweaks .tt-tweaks-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tooltip-tweaks label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 3px;
+  transition: background 100ms;
+}
+.tooltip-tweaks label:hover { background: rgba(220, 170, 90, 0.1); }
+.tooltip-tweaks input[type="radio"] {
+  accent-color: #f7c469;
+}
+.tooltip-tweaks .tt-tweaks-hint {
+  font-size: 10px;
+  color: rgba(220, 170, 90, 0.7);
+  font-style: italic;
+}

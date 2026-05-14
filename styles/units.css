@@ -1,0 +1,221 @@
+/* units.css — юниты на поле боя: позиционирование, цвет команд,
+   спрайт-рендер, анимации (slide, shake, crit-shake, die, acting-pulse), HP-бар.
+   Что внутри:
+     • .unit — внешний слой юнита (позиция в клетке, рамка команды, opacity-fade при смерти).
+     • .unit-inner — внутренний контейнер для анимаций движения/тряски.
+     • .unit-inner img — спрайт юнита (с общим scale 1.18) и переопределения
+       для конкретных классов (.unit[data-class="archer"], .unit[data-class="warrior"]).
+       Там же сидят итерационно подобранные scale/translateY для каждого спрайта.
+     • Анимации: .is-hit + @keyframes unit-shake, .is-crit + @keyframes unit-shake-hard,
+       .is-dying + @keyframes unit-die.
+     • .unit.acting::after — пульсирующее свечение активного юнита, +
+       @keyframes pulse-acting.
+     • .unit .hp-bar — узкая полоска HP внизу клетки.
+   Что НЕ внутри:
+     • Могилы (tombstone.css), статус-эффекты (effects.css), подсветки клеток (board.css).
+   Где править размер спрайта конкретного класса: блоки .unit[data-class="..."] .unit-inner img.
+*/
+
+.unit {
+  position: absolute;
+  top: 0; left: 0;
+  width: var(--cell);
+  height: var(--cell);
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--cell) * 0.75);
+  line-height: 1;
+  cursor: pointer;
+  /* Транзишн только для opacity. transform НЕ транзиционим:
+     при изменении --cell (зум) позиция юнита пересчитывается,
+     и transition сделал бы «скачок» 250ms. Для анимации движения
+     в следующей сессии внутрь .unit вложим .unit-inner с своим
+     transform+transition — тогда зум и движение не мешают друг другу. */
+  transition: opacity 300ms ease;
+  /* координаты задаются инлайн-стилем --r, --c */
+  transform: translate(calc(var(--c) * var(--cell)), calc(var(--r) * var(--cell)));
+  /* тонкая цветная рамка по команде */
+  border: 2px solid transparent;
+  border-radius: 4px;
+  box-sizing: border-box;
+  /* НЕ ставим will-change/backface-visibility: это промотирует юнит
+     в свой растровый слой, который потом апскейлится scale() родителя
+     → размытие. Пусть юниты живут в общем слое .battlefield. */
+}
+.unit.team-a { border-color: var(--team-a); }
+.unit.team-b { border-color: var(--team-b); }
+.unit.selected { outline: 2px solid var(--selected); outline-offset: -2px; }
+.unit.dead { opacity: 0; pointer-events: none; }
+
+/* .unit-inner — внутренний контейнер для АНИМАЦИЙ юнита.
+   Зачем отдельный слой: transform у .unit вычисляется через --c/--r/--cell
+   (позиция на сетке) и меняется при зуме. Если бы мы здесь же делали
+   transition на transform — при каждом изменении --cell юнит бы ехал
+   250 мс, ломая зум. Поэтому transform-offset для анимаций живёт у
+   .unit-inner через --ox/--oy, а у .unit остаётся «жёсткая» позиция
+   в клетке. .unit-inner занимает всю клетку и уже он центрирует
+   визуал и hp-bar. */
+.unit-inner {
+  position: absolute;
+  inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  transform: translate(var(--ox, 0px), var(--oy, 0px));
+  will-change: transform;
+}
+.unit-inner.slide {
+  /* Длительность шага — одна клетка. Для многошагового движения
+     (путь по ортогонали) каждый шаг анимируется отдельно, и эти
+     370мс задают темп «ходьбы». Linear даёт ровный ритм между шагами;
+     ease-out оставил бы паузы на стыках.
+     C24: длительность делится на --anim-speed-mul (1/2/3/4×). NB —
+     playMoveAnimation в render-units.js при необходимости перебивает
+     этот transition inline-стилем `transitionDuration` (для рывка воина
+     с opts.speedMul=2 и для глобального ускорения), поэтому см. также
+     STEP_MS в render-units.js. */
+  transition: transform calc(370ms / var(--anim-speed-mul, 1)) linear;
+}
+
+/* Юнит на боевом поле: спрайт чуть «выходит» за пределы клетки по
+   длинной оси (object-fit: contain + scale 1.18). Так высокий персонаж
+   визуально занимает всю клетку, не теряя пропорций; небольшой бликинг
+   в соседнюю клетку приемлем — это лишь рендер, логически юнит по-
+   прежнему сидит в своей клетке. overflow:visible у .unit-inner
+   уже стоит по умолчанию. */
+.unit-inner img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  transform: scale(1.18);
+  transform-origin: center bottom;
+}
+/* Лучник: спрайт нарисован чуть «выше» в своём канвасе и визуально
+   меньше, чем у воина/зомби. Ранее scale был 1.36 (+15% к общему 1.18),
+   после визуального сравнения с магом — добавлено ещё +10%, итог 1.496.
+   translateY(8%) оставлен прежним, он просто «опускает» юнита ниже,
+   чтобы стоял на полу; эмпирический якорь переживает масштабирование.
+   translate раньше scale в записи transform применяется ПОСЛЕДНИМ к
+   координатам — сначала элемент масштабируется, затем сдвигается. */
+.unit[data-class="archer"] .unit-inner img {
+  transform: translateY(20%) scale(1.646);
+}
+/* Воин: новый pixel-art спрайт занимает в своём канвасе меньшую долю
+   площади, чем старый плейсхолдер (есть прозрачные поля сверху/снизу),
+   поэтому на scale(1.10), который хорошо работал раньше, выглядел
+   заметно мелко. Масштаб подобран итеративно: сначала 1.43 (+30%),
+   затем +10% после визуального сравнения с магом — текущее 1.573.
+   translateY оставляем прежним (10%) — это «якорь» от плейсхолдера,
+   который визуально работает; формула (scale−1)×100% здесь неверна
+   из-за прозрачных полей в спрайте (юнит резко уезжал вниз). */
+.unit[data-class="warrior"] .unit-inner img {
+  transform: translateY(28%) scale(1.730);
+}
+
+/* Shake при получении урона.
+   Чистая keyframe-анимация — короткая, не блокирует игровую логику.
+   Красная вспышка фоном через box-shadow inset. */
+.unit.is-hit .unit-inner {
+  /* C24: длительность делится на --anim-speed-mul (1/2/3/4×).
+     JS-таймер в playHitAnimation идёт через AnimSpeed.scaled(380),
+     синхронизирован. */
+  animation: unit-shake calc(360ms / var(--anim-speed-mul, 1)) ease;
+}
+.unit.is-hit {
+  box-shadow: inset 0 0 0 2px rgba(255, 80, 80, 0.85), 0 0 10px rgba(255, 80, 80, 0.7);
+}
+@keyframes unit-shake {
+  0%   { transform: translate(calc(var(--ox, 0px) + 0px),  var(--oy, 0px)); }
+  15%  { transform: translate(calc(var(--ox, 0px) - 3px), calc(var(--oy, 0px) - 1px)); }
+  30%  { transform: translate(calc(var(--ox, 0px) + 3px), calc(var(--oy, 0px) + 1px)); }
+  45%  { transform: translate(calc(var(--ox, 0px) - 2px),  var(--oy, 0px)); }
+  60%  { transform: translate(calc(var(--ox, 0px) + 2px), calc(var(--oy, 0px) - 1px)); }
+  75%  { transform: translate(calc(var(--ox, 0px) - 1px), calc(var(--oy, 0px) + 1px)); }
+  100% { transform: translate(var(--ox, 0px), var(--oy, 0px)); }
+}
+/* Крит — более жёсткая дрожь + жёлтая вспышка. */
+.unit.is-crit .unit-inner {
+  /* C24: длительность делится на --anim-speed-mul (см. .unit.is-hit). */
+  animation: unit-shake-hard calc(460ms / var(--anim-speed-mul, 1)) ease;
+}
+.unit.is-crit {
+  box-shadow: inset 0 0 0 2px rgba(255, 223, 122, 0.95), 0 0 14px rgba(255, 223, 122, 0.85);
+}
+@keyframes unit-shake-hard {
+  0%   { transform: translate(var(--ox, 0px), var(--oy, 0px)); }
+  10%  { transform: translate(calc(var(--ox, 0px) - 5px), calc(var(--oy, 0px) - 2px)); }
+  25%  { transform: translate(calc(var(--ox, 0px) + 5px), calc(var(--oy, 0px) + 2px)); }
+  40%  { transform: translate(calc(var(--ox, 0px) - 4px), calc(var(--oy, 0px) + 1px)); }
+  55%  { transform: translate(calc(var(--ox, 0px) + 4px), calc(var(--oy, 0px) - 1px)); }
+  70%  { transform: translate(calc(var(--ox, 0px) - 2px), var(--oy, 0px)); }
+  85%  { transform: translate(calc(var(--ox, 0px) + 2px), var(--oy, 0px)); }
+  100% { transform: translate(var(--ox, 0px), var(--oy, 0px)); }
+}
+/* Смерть — fade-out с небольшим уменьшением перед превращением в надгробие.
+   Применяется к unit-inner, чтобы не трогать transform самой .unit. */
+.unit.is-dying .unit-inner {
+  /* C24: длительность делится на --anim-speed-mul. JS-таймер
+     scheduleDeathCleanup идёт через AnimSpeed.scaled(540). */
+  animation: unit-die calc(520ms / var(--anim-speed-mul, 1)) ease forwards;
+}
+@keyframes unit-die {
+  0%   { opacity: 1; transform: translate(var(--ox, 0px), var(--oy, 0px)) scale(1); }
+  100% { opacity: 0; transform: translate(var(--ox, 0px), var(--oy, 0px)) scale(0.55); }
+}
+
+/* Маскировка (С23) — юнит полупрозрачный: визуальный маркер «он сейчас
+   невидим для AI». Без цветового сдвига — лучник может прятаться не
+   только в траве, прозрачность даёт нейтральный сигнал «слился с фоном»
+   независимо от того, что под юнитом (трава/тайл/тротуар будущих карт).
+   Действует на .unit-inner, чтобы не трогать саму .unit-обёртку
+   (transform/позиция через --r/--c остаются нетронутыми, рамка команды
+   и свечение acting тоже — игрок видит «вот мой ход, и в маскировке»).
+   transition сглаживает момент наложения/снятия. Длительность ~200мс
+   достаточно, чтобы изменение было заметно, но не отвлекало.
+
+   Замечание: .is-camouflaged НЕ должна перетирать .is-dying — её
+   keyframe-анимация переопределит opacity сверху вниз до 0, и игрок
+   увидит затухание в надгробие как обычно. Поэтому правило для
+   .is-camouflaged ограничено только .unit-inner НЕ внутри .is-dying. */
+.unit.is-camouflaged:not(.is-dying) .unit-inner {
+  opacity: 0.4;
+  transition: opacity 200ms ease;
+}
+
+/* Свечение активного юнита — отдельным псевдо-элементом.
+   ВАЖНО: тень и размер СТАТИЧНЫ — иначе композитор на каждом фрейме
+   пересчитывает визуальные границы и получается «тряска» на субпикселях
+   при scale() родителя. Пульсируем только opacity — это чистая
+   композиторная анимация, без перерасчёта геометрии. */
+.unit.acting::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 6px;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px var(--acting), 0 0 14px var(--acting);
+  animation: pulse-acting 1.6s ease-in-out infinite;
+}
+/* Пульсация — через opacity (композиторная анимация, 0 layout/paint).
+   Применяется к псевдо-элементу .unit.acting::after выше. */
+@keyframes pulse-acting {
+  0%, 100% { opacity: 0.75; }
+  50%      { opacity: 1.0;  }
+}
+
+.unit .hp-bar {
+  position: absolute;
+  left: 2px; right: 2px; bottom: 1px;
+  height: 3px;
+  background: #000;
+  border-radius: 1px;
+}
+.unit .hp-bar .fill {
+  height: 100%;
+  background: var(--hp);
+  border-radius: 1px;
+  /* C24: длительность делится на --anim-speed-mul. */
+  transition: width calc(200ms / var(--anim-speed-mul, 1)) ease;
+}

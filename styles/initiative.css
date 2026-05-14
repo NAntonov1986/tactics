@@ -1,0 +1,62 @@
+/* initiative.css — полоска очерёдности справа от поля.
+   Что внутри:
+     • .initiative-strip — контейнер.
+     • .initiative-strip .title и .round-indicator — заголовок с номером раунда.
+       Внимание: правил .round-indicator ДВА (короткое в .title и более полное
+       для отдельного бейджа); сохраняем оба, как было в исходном CSS.
+     • .initiative-list — вертикальный список чипов.
+     • .ini-chip + состояния (.team-a/.team-b/.acting/.selected) и .order-badge.
+   Что НЕ внутри:
+     • Спрайты внутри ini-chip img — общая sprite-rendering лежит в base.css.
+   Где править вид активного юнита в очерёдности: .ini-chip.acting.
+*/
+
+.initiative-strip {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 8px;
+  width: 72px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.initiative-strip .title {
+  font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px;
+  text-align: center; line-height: 1.2;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.round-indicator { font-size: 10px; color: var(--accent); letter-spacing: 0; }
+.initiative-list { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.ini-chip {
+  width: 44px; height: 44px; position: relative;
+  background: #0e0a07; border: 2px solid var(--panel-border); border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; cursor: pointer;
+}
+.ini-chip.team-a { border-color: var(--team-a); }
+.ini-chip.team-b { border-color: var(--team-b); }
+.ini-chip.acting { box-shadow: 0 0 0 2px var(--acting); }
+.ini-chip.selected { outline: 2px dashed var(--selected); outline-offset: 2px; }
+.ini-chip .order-badge {
+  position: absolute; top: -6px; left: -6px;
+  background: var(--panel-bg); color: var(--accent);
+  border: 1px solid var(--panel-border); border-radius: 50%;
+  width: 16px; height: 16px;
+  font-size: 10px; display: flex; align-items: center; justify-content: center;
+}
+
+/* Индикатор раунда в полоске инициативы — отдельный «бейдж»-вариант
+   (используется, когда нужен фон/рамка вокруг номера раунда; в .title
+   выше — более лёгкий вариант без фона). */
+.round-indicator {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  background: #0e0a07;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru" data-theme="hearth">
+<head>
+<meta charset="utf-8">
+<title>Фэнтези тактика — арена (фентези UI)</title>
+
+<!-- Google Fonts: Cinzel (благородный засечный для заголовков и чисел),
+     IM Fell English / SC (рукописный/SC рукописный для логов и тела). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&display=swap" rel="stylesheet">
+
+<!--
+  ================================================================
+  ФЭНТЕЗИ ПОШАГОВАЯ ТАКТИКА — АРЕНА (ФЭНТЕЗИ UI ПОВЕРХ ОСНОВНОЙ ИГРЫ)
+  ================================================================
+  Поверх ВСЕХ базовых стилей подключается фэнтези-слой:
+     • styles/fantasy.css  — рамки, текстуры, шрифты, темы (data-theme).
+     • styles/tooltip.css  — кастомные подсказки (заменяют title=).
+     • src/ui/tooltip.js   — логика подсказок, авто-инициализируется.
+
+  Фэнтези-слой работает БЕЗ правок в render/ui/core: tooltip.js
+  перехватывает наведение на любые элементы с title=, fantasy.css
+  накладывается через селекторы html[data-theme=...].
+
+  Чтобы вернуться к "ванильному" виду — убрать 3 строки фэнтези-слоя
+  и атрибут data-theme на <html>. См. CODEX.md → «Карта файлов».
+  ================================================================
+-->
+<!-- Стили подключаются по доменам. Порядок важен только когда селекторы
+     перекрываются — base первой (переменные :root нужны всем),
+     дальше структурные (board/panel/initiative/log), потом контент
+     (units/tombstone/effects). См. CODEX.md → «Карта файлов». -->
+<link rel="stylesheet" href="styles/base.css">
+<link rel="stylesheet" href="styles/board.css">
+<link rel="stylesheet" href="styles/panel.css">
+<link rel="stylesheet" href="styles/initiative.css">
+<link rel="stylesheet" href="styles/units.css">
+<link rel="stylesheet" href="styles/tombstone.css">
+<link rel="stylesheet" href="styles/effects.css">
+<link rel="stylesheet" href="styles/log.css">
+<link rel="stylesheet" href="styles/level-up.css">
+<link rel="stylesheet" href="styles/inventory.css">
+<link rel="stylesheet" href="styles/camp.css">
+<link rel="stylesheet" href="styles/dev-tools.css">
+
+<!-- Фентези-слой ПОВЕРХ всех остальных. Накладывает текстуры, рамки,
+     шрифты и стилизацию шкал. Активен через атрибут data-theme на <html>:
+     "hearth" — тёплый дуб + золото, "codex" — пергамент + чернила.
+     Подключается ПОСЛЕДНИМ среди стилевых, т.к. использует селекторы со
+     специфичностью html[data-theme] для гарантированного перекрытия
+     базовых правил. -->
+<link rel="stylesheet" href="styles/fantasy.css">
+
+<!-- Кастомные тултипы (увеличенная иконка + структурированный текст,
+     3 стиля переключаемых через Tooltip.toggleTweaks()).
+     См. src/ui/tooltip.js. Сам tooltip.js перехватывает title="..." и
+     рисует свой popup поверх; render-цикл правок не требует. -->
+<link rel="stylesheet" href="styles/tooltip.css">
+</head>
+<body>
+
+<div class="arena">
+
+  <!-- ============ РАБОЧАЯ ОБЛАСТЬ: поле боя + инициатива справа ============ -->
+  <div class="workspace">
+    <div class="viewport" id="viewport">
+      <div class="battlefield" id="battlefield">
+        <div class="grid-layer" id="gridLayer"></div>
+        <!-- objects-layer (Сессия 22): постоянные объекты на поле — капканы,
+             приманки и т.п. Лежит ПОД юнитами визуально (юнит шагает поверх
+             капкана), НАД сеткой. state.objects — источник правды;
+             render-units.js → renderObjects() рисует. Между волнами
+             очищается в startNextWave. -->
+        <div class="objects-layer" id="objectsLayer"></div>
+        <div class="units-layer" id="unitsLayer"></div>
+        <div class="overlay-layer" id="overlayLayer"></div>
+        <div class="effects-layer" id="effectsLayer"></div>
+      </div>
+      <!-- Портретная панель — квадратный оверлей в ЛЕВОМ верхнем углу (С24). -->
+      <div class="portrait-panel" id="portraitPanel">
+        <!-- заполняется render() -->
+      </div>
+      <!-- Переключатель скорости анимаций (Сессия C24).
+           Лежит в ЛЕВОМ верхнем углу viewport, под панелью зума.
+           Высота 28 — компактный ряд из четырёх pill-кнопок 1×/2×/3×/4×.
+           CSS — в styles/board.css (.speed-controls / .speed-btn).
+           Логика — src/ui/anim-speed.js (window.AnimSpeed.set). -->
+      <div class="speed-controls" id="speedControls" title="Скорость анимаций">
+        <span class="speed-label">Скорость</span>
+        <button type="button" class="speed-btn" data-speed="1">1×</button>
+        <button type="button" class="speed-btn" data-speed="2">2×</button>
+        <button type="button" class="speed-btn" data-speed="3">3×</button>
+        <button type="button" class="speed-btn" data-speed="4">4×</button>
+      </div>
+      <!-- Зум — в ПРАВОМ верхнем углу (С24-рефактор), чтобы не пересекаться с портретом слева. -->
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoomIn" title="Приблизить (+)">+</button>
+        <div class="zoom-indicator" id="zoomIndicator">100%</div>
+        <button class="zoom-btn" id="zoomOut" title="Отдалить (−)">−</button>
+        <button class="zoom-btn" id="zoomReset" title="Сбросить вид (0)">⟲</button>
+      </div>
+      <div class="view-hint">Колесо — зум · средняя кнопка — панорама · стрелки — скролл</div>
+      <!-- Экран победы. Скрыт пока state.gameOver === null. -->
+      <div id="gameOverOverlay" class="game-over-overlay" style="display:none;"></div>
+    </div>
+    <!-- Вертикальная колонка инициативы справа от поля -->
+    <div class="initiative-strip">
+      <div class="title">Ходы<span class="round-indicator" id="roundIndicator">Раунд 1</span></div>
+      <div class="initiative-list" id="initiativeList"></div>
+    </div>
+  </div>
+
+  <!-- ============ НИЖНЯЯ ПАНЕЛЬ ============ -->
+  <div class="bottom" id="bottomPanel">
+    <!-- заполняется render() -->
+  </div>
+
+  <!-- ============ ЛОГ СОБЫТИЙ ============ -->
+  <div class="log-panel" id="logPanel">
+    <div class="log-title">Журнал боя</div>
+    <div id="logEntries"></div>
+  </div>
+
+</div>
+
+<!-- Извлечённые модули данных подключаются ПЕРЕД inline-блоком —
+     их глобальные определения видны в inline-коде ниже.
+     По мере прогресса рефакторинга этот список будет расти.
+     См. CODEX.md → «Карта файлов». -->
+<script src="src/data/damage-types.js"></script>
+<script src="src/data/unit-types.js"></script>
+<script src="src/data/stats.js"></script>
+<script src="src/data/weapons.js"></script>
+<script src="src/data/equipment.js"></script>
+<script src="src/data/consumables.js"></script>
+<script src="src/data/affixes.js"></script>
+<script src="src/data/skills.js"></script>
+<script src="src/data/classes.js"></script>
+<script src="src/data/economy.js"></script>
+<script src="src/core/state.js"></script>
+<script src="src/core/stats-calc.js"></script>
+<script src="src/core/loot.js"></script>
+<script src="src/core/save.js"></script>
+<script src="src/core/damage.js"></script>
+<script src="src/core/effects.js"></script>
+<script src="src/core/skills.js"></script>
+<script src="src/core/level-up.js"></script>
+<script src="src/core/movement.js"></script>
+<script src="src/core/aggro.js"></script>
+<script src="src/core/combat.js"></script>
+<script src="src/core/ai.js"></script>
+<script src="src/core/turn.js"></script>
+<script src="src/render/render.js"></script>
+<script src="src/render/render-units.js"></script>
+<script src="src/render/render-overlay.js"></script>
+<script src="src/render/render-effects.js"></script>
+<script src="src/render/render-log.js"></script>
+<script src="src/render/render-initiative.js"></script>
+<script src="src/render/render-panel.js"></script>
+<script src="src/render/render-inventory.js"></script>
+<script src="src/render/render-camp.js"></script>
+<script src="src/render/render-modals.js"></script>
+<!-- Общий построитель статичного тултипа скилла (без runtime-условий).
+     Используется render-level-up.js для тултипов карточек выбора скилла /
+     улучшения тира. См. шапку src/render/skill-tooltip.js. -->
+<script src="src/render/skill-tooltip.js"></script>
+<script src="src/render/render-level-up.js"></script>
+<!-- Отладочный лог: кольцевой буфер событий + DOM-снапшот, для удалённой
+     диагностики через DevTools popover «Дамп для агента». Подключается
+     ПЕРВЫМ среди ui/, чтобы scroll/style mutation-перехватчики успели
+     зарегистрироваться до основного цикла. См. src/ui/debug-log.js. -->
+<script src="src/ui/debug-log.js"></script>
+<script src="src/ui/zoom-pan.js"></script>
+<script src="src/ui/input.js"></script>
+<script src="src/ui/hotkeys.js"></script>
+<script src="src/ui/dev-tools.js"></script>
+<!-- Глобальный множитель скорости анимаций (1×/2×/3×/4×). Автоматически
+     биндится к .speed-controls на DOMContentLoaded; от core/state.init()
+     зависимости нет, поэтому подключается рядом с другими ui/-модулями. -->
+<script src="src/ui/anim-speed.js"></script>
+
+<!-- Кастомные фэнтези-тултипы. Самоинициализируется на DOMContentLoaded,
+     перехватывает title="..." на любых элементах. См. shapка tooltip.js. -->
+<script src="src/ui/tooltip.js"></script>
+
+<script src="src/main.js"></script>
+</body>
+</html>
+
+                                                          

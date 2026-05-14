@@ -1,0 +1,615 @@
+/* board.css — поле боя как контейнер: viewport, сцена, сетка, слои, подсветки.
+   Что внутри:
+     • .viewport (внешнее окно) + .battlefield (сцена) + правила зума/пана.
+     • .zoom-controls, .zoom-btn, .zoom-indicator, .view-hint — UI зума поверх viewport.
+     • .grid-layer и .cell — фоновая шахматка клеток.
+     • Декларация трёх слоёв: .units-layer, .overlay-layer, .effects-layer
+       (общие позиционные правила; содержимое слоёв описано в units/effects/tombstone).
+     • .highlight-cell + все варианты подсветки (move, attack, area-attack,
+       fireball-range, fireball-aoe, fireball-center).
+     • .move-path-marker — превью маршрута в режиме движения.
+     • .game-over-overlay — экран победы/поражения поверх viewport.
+   Что НЕ внутри:
+     • Сами юниты (units.css), могилы (tombstone.css), вспышки спецэффектов
+       (effects.css), панели (panel.css/initiative.css).
+   Где править стиль конкретной подсветки/режима прицеливания: тут.
+*/
+
+.viewport {
+  position: relative;
+  width: 100%;
+  height: 700px;
+  min-width: 0;
+  background: #0a0806;
+  border: 2px solid var(--panel-border);
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+}
+.viewport.panning { cursor: grabbing; }
+.battlefield {
+  position: absolute;
+  top: 0; left: 0;
+  width: calc(var(--cell) * var(--grid-cells));
+  height: calc(var(--cell) * var(--grid-cells));
+  /* Зум = физическое изменение --cell (все размеры/координаты/шрифт
+     завязаны на него). transform: scale() НЕ используем — он
+     растеризует сцену в 1x и апскейлит битмап, из-за чего эмодзи
+     мылит. Panning — чистый translate, без scale, он крист-шарп. */
+  transform: translate(var(--pan-x, 0px), var(--pan-y, 0px));
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+/* Панель управления зумом — поверх viewport в ПРАВОМ верхнем углу
+   (С24-рефактор: левый занят портретной панелью). */
+.zoom-controls {
+  position: absolute;
+  top: 8px; right: 8px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.zoom-btn {
+  width: 32px; height: 28px;
+  background: rgba(26, 20, 16, 0.85);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  font-family: inherit;
+  line-height: 1;
+  padding: 0;
+}
+.zoom-btn:hover { background: rgba(42, 32, 24, 0.95); border-color: var(--accent); color: var(--accent); }
+.zoom-indicator {
+  background: rgba(26, 20, 16, 0.85);
+  color: var(--text-dim);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  font-size: 10px;
+  padding: 3px 4px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Переключатель скорости анимаций (C24).
+   Лежит в ЛЕВОМ верхнем углу viewport, прямо под портретной панелью.
+   После С24-рефактора (фиксация позиции портрета) обходные манёвры с
+   position:relative больше не нужны — портрет имеет твёрдый
+   `top:8 + height:auto`, итог нижнего края ≈ 250 в фентези-теме.
+   Ставим контрол на top:260 — небольшой gap 8-10 px ниже портрета.
+
+   Состояние «активная скорость» подсвечивается через .active (выставляется
+   в src/ui/anim-speed.js → renderButtonsState).
+   Тема fantasy.css накладывает свои переопределения по селектору
+   html[data-theme] .speed-controls. */
+.speed-controls {
+  position: absolute;
+  top: 260px;
+  left: 8px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: rgba(26, 20, 16, 0.85);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+.speed-controls .speed-label {
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-right: 2px;
+  font-family: inherit;
+}
+.speed-btn {
+  width: 28px; height: 22px;
+  background: rgba(26, 20, 16, 0.85);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  padding: 0;
+}
+.speed-btn:hover {
+  background: rgba(42, 32, 24, 0.95);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.speed-btn.active {
+  background: var(--accent);
+  color: #1a1410;
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.view-hint {
+  position: absolute;
+  left: 8px; bottom: 6px;
+  z-index: 10;
+  color: var(--text-dim);
+  font-size: 10px;
+  background: rgba(26, 20, 16, 0.7);
+  padding: 2px 6px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.grid-layer {
+  position: absolute; inset: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--grid-cells), var(--cell));
+  grid-template-rows: repeat(var(--grid-cells), var(--cell));
+}
+.cell {
+  /* Текстура арены — травяной тайл (Сессия травы, 03.05.2026, ред. 2).
+     На КАЖДУЮ клетку накладывается своя копия PNG (по запросу
+     пользователя — узор виден отдельно для каждой клетки, а не один
+     на всё поле). background-size: 100% 100% — тайл растягивается
+     ровно на размер клетки. image-rendering: pixelated — сохраняем
+     pixel-art резкость при downscale до 40px (тайл 1254×1254).
+
+     Поверх травы — тонкая полупрозрачная сетка (border на правом и
+     нижнем краях). Цвет настраивается через --grid-line-color в
+     base.css. Шахматное чередование .even/.odd убрано: оба класса
+     прозрачные относительно фона травы (.cell.even/.cell.odd ниже). */
+  background-image: url('../assets/sprites/tiles/grass.png');
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges; /* fallback для не-Chrome (Firefox) */
+  border-right: 1px solid var(--grid-line-color);
+  border-bottom: 1px solid var(--grid-line-color);
+}
+/* .even/.odd оставлены для совместимости с render-units, но БЕЗ фона —
+   фон рисует .cell выше (травяной тайл). Если когда-нибудь захочется
+   подкрашивать чётные/нечётные клетки оверлеем — добавить background
+   с rgba (полупрозрачным), чтобы трава просвечивала. */
+.cell.even, .cell.odd { background-color: transparent; }
+
+/* Слои поверх сетки. .units-layer перехватывает клики (юниты кликабельны),
+   остальные — pointer-events: none по умолчанию (а .highlight-cell внутри
+   overlay-layer включает себе pointer-events явно).
+   .objects-layer (С22) — постоянные объекты (капканы, приманки) под юнитами
+   визуально, не перехватывает клики (юнит на той же клетке должен оставаться
+   кликабельным). */
+.objects-layer, .units-layer, .overlay-layer, .effects-layer {
+  position: absolute; inset: 0;
+  pointer-events: none;
+}
+.units-layer { pointer-events: auto; }
+
+/* Объект на поле (С22). Позиция через --r/--c как у юнитов и подсветок.
+   Размер = клетка. Спрайт — <img> внутри. */
+.field-object {
+  position: absolute;
+  width: var(--cell);
+  height: var(--cell);
+  transform: translate(calc(var(--c) * var(--cell)), calc(var(--r) * var(--cell)));
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.field-object img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  /* С07.05.2026: img по умолчанию pointer-events:auto и НЕ наследует
+     pointer-events:none от родителя .field-object. Без этой строки
+     img перехватывает hover/click на месте спрайта (приманка/капкан),
+     и нижележащая .cell в gridLayer не получает события — ломает
+     делегированный hover приманки (показ радиуса) и field-click
+     деселект через клетку. Делаем img прозрачной для pointer events,
+     чтобы события проходили насквозь. */
+  pointer-events: none;
+}
+.field-object.trap img { opacity: 0.95; }
+.field-object.lure {
+  filter: drop-shadow(0 0 calc(var(--cell) * 0.08) rgba(255, 200, 80, 0.5));
+  /* pointer-events наследует none от .field-object базы, чтобы события
+     hover/click проходили насквозь к .cell в gridLayer (там делегированный
+     handler в render-units.js → _bindLureHoverDelegation показывает
+     радиус-превью, а field-click деселектит). */
+}
+.field-object.lure img {
+  animation: lure-pulse 1.6s ease-in-out infinite;
+}
+@keyframes lure-pulse {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 1.0;  }
+}
+
+/* Подсветка зоны действия приманки при hover (С07.05.2026 правка).
+   По аналогии с .aggro-preview / .move-preview — рисуется в
+   overlayLayer временно, на время наведения мыши. Цвет — янтарный,
+   в тон drop-shadow самой приманки. Манхэттен ≤ lureRadius. */
+.lure-preview {
+  background: rgba(255, 200, 80, 0.18);
+  outline: 1px solid rgba(255, 200, 80, 0.45);
+  outline-offset: -1px;
+  box-sizing: border-box;
+}
+
+/* Подсветка валидных клеток для размещения trap/lure (state.mode ===
+   'trap' | 'lure'). Зелёная заливка по аналогии с teleport-target
+   (нейтрально-полезное действие, не атака). pointer-events: auto —
+   клик размещает объект. */
+.highlight-cell.place-target {
+  background: rgba(120, 180, 90, 0.32);
+  outline: 1px solid rgba(120, 180, 90, 0.7);
+}
+.highlight-cell.place-target:hover {
+  background: rgba(140, 200, 100, 0.5);
+}
+/* Effects-layer — для вспышек, летящих снарядов и подобных эффектов.
+   НЕ чистится при renderUnits, чтобы анимация не обрывалась при
+   последующем рендере (который часто происходит сразу после каста). */
+/* Overlay — это слой подсветок клеток в режиме прицеливания.
+   Каждая подсветка = абс. позиционированная клетка с transform: translate,
+   по тому же принципу что и юниты. Кликается — запускает move/attack. */
+.highlight-cell {
+  position: absolute;
+  top: 0; left: 0;
+  width: var(--cell);
+  height: var(--cell);
+  pointer-events: auto;
+  cursor: pointer;
+  box-sizing: border-box;
+  transform: translate(calc(var(--c) * var(--cell)), calc(var(--r) * var(--cell)));
+}
+.highlight-cell.move {
+  background: rgba(92, 140, 184, 0.25);
+  outline: 1px solid rgba(120, 180, 230, 0.55);
+  outline-offset: -2px;
+}
+.highlight-cell.move:hover {
+  background: rgba(120, 180, 230, 0.42);
+}
+/* Яркая подсветка конкретной цели (враг в радиусе) */
+.highlight-cell.attack {
+  /* Усилено для читаемости на травяном фоне (Сессия травы): alpha
+     поднята с 0.25 → 0.40, outline стал ярче. На зелёной траве
+     красный читается отлично, но раньше background был тусклым. */
+  background: rgba(226, 70, 70, 0.42);
+  outline: 2px solid rgba(255, 140, 140, 0.95);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 1px rgba(120, 0, 0, 0.55);
+}
+.highlight-cell.attack:hover {
+  background: rgba(255, 60, 60, 0.62);
+}
+/* Зона досягаемости — мягкий фон по всей области, где юнит может
+   атаковать. Кликать по ней не нужно (цели сверху), поэтому
+   pointer-events: none — клики по врагам проходят насквозь к
+   яркой подсветке цели, клики по пустоте/союзникам — к фону
+   (отменяет режим, как раньше). */
+.highlight-cell.area-attack {
+  /* Зона досягаемости — раньше alpha 0.10/0.30 dashed терялась на
+     траве. Подняли до 0.22 + solid outline 0.65 alpha. Поверх
+     добавлен слабый красноватый duotone (через box-shadow inset),
+     чтобы зона визуально «оттенялась» от обычной травы, даже когда
+     юнитов в ней нет. */
+  background: rgba(226, 70, 70, 0.22);
+  outline: 1px solid rgba(255, 100, 100, 0.65);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 1px rgba(140, 0, 0, 0.18);
+  pointer-events: none;
+}
+.overlay-layer { pointer-events: none; }
+.overlay-layer .highlight-cell { pointer-events: auto; }
+.overlay-layer .highlight-cell.area-attack { pointer-events: none; }
+
+/* Превью пути в режиме движения. На каждой промежуточной клетке —
+   стрелка в направлении следующего шага. На целевой — точка-метка
+   («сюда придёт юнит»). pointer-events: none, чтобы не перехватывать
+   клики у нижележащей .highlight-cell.move (она и принимает клик
+   для запуска executeMove). z-index ставим выше подсветок move/attack,
+   но ниже юнитов. */
+.move-path-marker {
+  position: absolute;
+  top: 0; left: 0;
+  width: var(--cell);
+  height: var(--cell);
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--cell) * 0.55);
+  line-height: 1;
+  font-weight: 700;
+  color: rgba(220, 240, 255, 0.95);
+  text-shadow: 0 0 4px rgba(20, 60, 100, 0.95), 0 0 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  transform: translate(calc(var(--c) * var(--cell)), calc(var(--r) * var(--cell)));
+  z-index: 4;
+}
+.move-path-marker.end {
+  color: rgba(255, 244, 200, 1);
+  text-shadow: 0 0 6px rgba(80, 140, 200, 1), 0 0 2px rgba(0, 0, 0, 0.85);
+}
+
+/* ========= ФАЕРБОЛ: ПОДСВЕТКИ ========= */
+/* Сами правила тут — это подсветки прицеливания на overlay-layer.
+   Анимация вспышки и спрайт огненного шара — в effects.css. */
+/* Радиус каста (клетки, куда можно прицелиться). */
+.highlight-cell.fireball-range {
+  /* Зона прицеливания фаербола — поднята с 0.10 → 0.22 background и
+     с 0.45 dashed → 0.75 solid outline. На травяном фоне оранжевый
+     стал явно читаться. */
+  background: rgba(255, 130, 50, 0.22);
+  outline: 1px solid rgba(255, 170, 80, 0.75);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 1px rgba(160, 60, 0, 0.20);
+}
+.highlight-cell.fireball-range:hover {
+  background: rgba(255, 110, 30, 0.50);
+  outline-color: rgba(255, 200, 130, 0.95);
+}
+/* Превью 3×3 AoE при наведении на валидную клетку радиуса. */
+.highlight-cell.fireball-aoe {
+  /* Превью AoE 3×3 — поднята до 0.40 background, чтобы зона взрыва
+     чётко выделялась на траве. */
+  background: rgba(255, 80, 40, 0.40);
+  outline: 1px solid rgba(255, 170, 100, 0.95);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 1px rgba(140, 30, 0, 0.30);
+  pointer-events: none;
+}
+/* Центральная клетка прицела — чуть ярче. */
+.highlight-cell.fireball-center {
+  background: rgba(255, 60, 20, 0.35);
+  outline: 2px solid rgba(255, 180, 100, 0.95);
+  outline-offset: -2px;
+  pointer-events: none;
+}
+
+/* === Молния (Сессия 10) ============================================
+   Прицел — одна из 4 смежных к магу клеток (lightning-anchor),
+   при наведении на anchor рисуется дорожка линии (lightning-line)
+   до длины тира (5/7/9 клеток) от anchor «от мага». Жёлтый
+   электрический оттенок. anchor — кликабельная (по umolch.
+   pointer-events: auto через .overlay-layer .highlight-cell);
+   line-клетки — насквозь (pointer-events: none), чтобы клик
+   проходил к лежащему под ними anchor. */
+.highlight-cell.lightning-anchor {
+  background: rgba(245, 216, 74, 0.18);
+  outline: 1px dashed rgba(245, 216, 74, 0.85);
+  outline-offset: -2px;
+}
+.highlight-cell.lightning-anchor:hover {
+  background: rgba(245, 216, 74, 0.40);
+  outline: 2px solid rgba(255, 240, 140, 0.95);
+}
+.highlight-cell.lightning-line {
+  background: rgba(245, 216, 74, 0.30);
+  outline: 1px solid rgba(255, 240, 140, 0.85);
+  outline-offset: -2px;
+  pointer-events: none;
+}
+
+/* === Телепорт (Сессия 13) ==========================================
+   Подсветка валидных пустых клеток в радиусе телепорта (манхэттен ≤
+   range). Сине-фиолетовая палитра — отличается и от движения (зелёная),
+   и от молнии (жёлтая), и от фаербола/single-target (красно-оранжевая).
+   Превью пути не делаем (телепорт «мгновенный»). */
+.highlight-cell.teleport-target {
+  background: rgba(150, 110, 220, 0.18);
+  outline: 1px dashed rgba(180, 140, 240, 0.85);
+  outline-offset: -2px;
+}
+.highlight-cell.teleport-target:hover {
+  background: rgba(150, 110, 220, 0.40);
+  outline: 2px solid rgba(220, 190, 255, 0.95);
+}
+
+/* === Огненный щит / buff-target (Сессия 14) ========================
+   Подсветка валидных целей buff-режима: сам маг и СОЮЗНИКИ в манхэттене
+   ≤1. Янтарно-золотистая палитра — отличается и от зелёной (движение),
+   и от красно-оранжевой (фаербол / атака врагов), и от жёлтой (молния),
+   и от фиолетовой (телепорт). Тематически попадает в «огненный щит»
+   и подходит для будущих buff-скиллов с тем же правилом цели. */
+.highlight-cell.buff-target {
+  background: rgba(245, 178, 60, 0.20);
+  outline: 1px dashed rgba(255, 200, 100, 0.85);
+  outline-offset: -2px;
+}
+.highlight-cell.buff-target:hover {
+  background: rgba(245, 178, 60, 0.42);
+  outline: 2px solid rgba(255, 220, 140, 0.95);
+}
+
+/* === Self-AoE (Camp v1.5-priest-C, 11.05.2026) =====================
+   AoE-радиус вокруг кастера (Волна света). Светло-золотая палитра —
+   ассоциация с holy/священным светом. Все клетки кликабельны, но
+   фактически клик на любой подтверждает каст (target всегда — кастер).
+   Hover не отличается от base — нет смысла подчёркивать конкретную
+   клетку, цель не позиционная. */
+.highlight-cell.self-aoe {
+  background: rgba(255, 230, 130, 0.18);
+  outline: 1px dashed rgba(255, 240, 180, 0.7);
+  outline-offset: -2px;
+  cursor: pointer;
+}
+.highlight-cell.self-aoe:hover {
+  background: rgba(255, 230, 130, 0.32);
+}
+
+/* === Очищение / cleanse-target (Сессия 15) =========================
+   Подсветка валидных целей очищения: ЛЮБОЙ живой юнит в манхэттене
+   ≤range (сам маг, союзники, враги). Бирюзово-циан палитра — отличается
+   от всего: зелёного (движение), красно-оранжевого (атака/фаербол),
+   жёлтого (молния), фиолетового (телепорт), янтарного (buff). Тематически
+   попадает в «святое очищение» / «снятие чар». */
+.highlight-cell.cleanse-target {
+  background: rgba(80, 220, 200, 0.20);
+  outline: 1px dashed rgba(120, 240, 220, 0.85);
+  outline-offset: -2px;
+}
+.highlight-cell.cleanse-target:hover {
+  background: rgba(80, 220, 200, 0.42);
+  outline: 2px solid rgba(160, 255, 240, 0.95);
+}
+
+/* === Рывок воина / leap-target (Сессия 18) =========================
+   Подсветка пустых клеток в радиусе рывка. Кроваво-красная палитра —
+   «героический физический бросок», отличается от телепорта мага
+   (фиолетовый) и от прочих атакующих подсветок. */
+.highlight-cell.leap-target {
+  background: rgba(220, 60, 50, 0.20);
+  outline: 1px dashed rgba(255, 100, 80, 0.85);
+  outline-offset: -2px;
+}
+.highlight-cell.leap-target:hover {
+  background: rgba(220, 60, 50, 0.45);
+  outline: 2px solid rgba(255, 160, 130, 0.95);
+}
+
+/* === Круговой удар / whirlwind-target (Сессия 18) ==================
+   Подсветка 8 смежных клеток вокруг кастера. Ярко-оранжевая, ближе
+   к цвету обычной атаки, но с двойной обводкой — намёк на «вихрь». */
+.highlight-cell.whirlwind-target {
+  background: rgba(255, 110, 60, 0.30);
+  outline: 2px solid rgba(255, 180, 100, 0.85);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 1px rgba(180, 50, 0, 0.40);
+}
+.highlight-cell.whirlwind-target:hover {
+  background: rgba(255, 80, 30, 0.55);
+  outline: 2px solid rgba(255, 220, 150, 0.98);
+}
+
+/* === Провокация / self-aura-target (Сессия 20) =====================
+   Подсветка манхэттенского радиуса вокруг воина в режиме «Провокация».
+   Тёмно-малиновая палитра — намёк на «крик ярости», отличается от
+   whirlwind (ярко-оранжевый chebyshev:1) и от ranged-атак. */
+.highlight-cell.self-aura-target {
+  background: rgba(220, 50, 110, 0.20);
+  outline: 1px dashed rgba(255, 100, 160, 0.85);
+  outline-offset: -2px;
+}
+.highlight-cell.self-aura-target:hover {
+  background: rgba(220, 50, 110, 0.45);
+  outline: 2px solid rgba(255, 180, 220, 0.95);
+}
+
+/* === Прикрыть / cover-target (Сессия 20) ===========================
+   Подсветка союзников (или любых юнитов на elite) в радиусе свапа.
+   Серебристо-голубая палитра — «дружеская поддержка», отличается
+   от агрессивных атак. */
+.highlight-cell.cover-target {
+  background: rgba(140, 180, 230, 0.30);
+  outline: 2px solid rgba(180, 220, 255, 0.85);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 1px rgba(60, 100, 160, 0.40);
+}
+.highlight-cell.cover-target:hover {
+  background: rgba(140, 200, 255, 0.55);
+  outline: 2px solid rgba(220, 240, 255, 0.98);
+}
+
+/* Экран окончания боя — поверх viewport */
+.game-over-overlay {
+  position: absolute; inset: 0;
+  background: rgba(10, 8, 6, 0.82);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 20;
+  color: var(--text);
+  gap: 16px;
+}
+.game-over-overlay .victory-title {
+  font-size: 32px;
+  color: var(--accent);
+  letter-spacing: 2px;
+}
+.game-over-overlay .victory-sub {
+  color: var(--text-dim);
+  font-size: 14px;
+}
+.game-over-overlay .restart-btn {
+  background: #1a1410;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 10px 20px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.game-over-overlay .restart-btn:hover {
+  background: #2a2018;
+}
+
+/* === Aggro badge + radius preview (Сессия aggro, 04.05.2026) =======
+   Бейдж справа-сверху над спрайтом NPC: 'Z' пока спит, '!' когда
+   заметил врага. Размер ~14px, читаемый на любом спрайте; не
+   перехватывает клики (pointer-events: none) — клик на юнита
+   проходит к нему как обычно.
+
+   Hover-превью (.aggro-preview) — мягкая жёлто-оранжевая заливка
+   клеток в Чебышевском радиусе. pointer-events: none — клики
+   проходят насквозь к нижележащему гриду/юнитам. Низкая alpha
+   и outline пунктиром, чтобы не сбивать с боевых подсветок. */
+.unit .aggro-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Cinzel, serif;
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
+  color: #fff;
+  pointer-events: none;
+  user-select: none;
+  z-index: 3;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+}
+.unit .aggro-badge.aggro-sleeping {
+  background: #5a7a8a;
+}
+.unit .aggro-badge.aggro-active {
+  background: #c44;
+  animation: aggroAlertPulse 1100ms ease-in-out infinite;
+}
+@keyframes aggroAlertPulse {
+  0%, 100% { transform: scale(1.0); box-shadow: 0 0 0 1px rgba(0,0,0,0.55), 0 0 4px rgba(255,80,80,0.6); }
+  50%      { transform: scale(1.18); box-shadow: 0 0 0 1px rgba(0,0,0,0.55), 0 0 10px rgba(255,80,80,0.9); }
+}
+
+.highlight-cell.aggro-preview {
+  background: rgba(255, 200, 60, 0.14);
+  outline: 1px dashed rgba(255, 200, 60, 0.55);
+  outline-offset: -2px;
+  pointer-events: none;
+  z-index: 1;  /* ниже основных боевых подсветок (но они и не появляются — preview прячется при state.mode) */
+}
+
+/* Превью реальной зоны хода активного NPC (move-range через BFS).
+   Появляется при наведении на active-зомби (правка 06.05.2026):
+   игрок видит, ДОКУДА монстр реально может прыгнуть в свой ход с
+   учётом текущей Скорости и блокеров (деревья, другие юниты).
+   Цвет — пыльно-красный, чтобы (а) отличаться от жёлтого .aggro-
+   preview (sleeping=«осторожно»), (б) не путаться с синим .move
+   героя и красным .attack (режимы прицеливания, появляются только
+   при state.mode — а в этот момент превью скрыто). */
+.highlight-cell.move-preview {
+  background: rgba(220, 80, 60, 0.16);
+  outline: 1px dashed rgba(220, 80, 60, 0.6);
+  outline-offset: -2px;
+  pointer-events: none;
+  z-index: 1;
+}
