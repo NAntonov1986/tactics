@@ -57,8 +57,9 @@
      • Bias toward higher base tier — отложено до балансного пакета
        (см. DESIGN.md → «Возможные расширения»).
 
-   Файл подключается в index.html ПОСЛЕ data/* и core/state.js, ДО
-   core/turn.js (туда генератор будет интегрирован в S7). */
+   Файл подключается в index.html ПОСЛЕ data/* и core/state.js.
+   Потребители: state.js (forceWaveVictory → generateRewardItem,
+   regenerateShopInventory → rollRewardForDifficulty). */
 
 (function () {
   let _lootIdCounter = 0;

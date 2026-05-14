@@ -2,6 +2,10 @@
 # не должны попадать в git, история и так сохраняется коммитами).
 backup/
 
+# Автобекапы перед каждой правкой (PreToolUse hook .claude/hooks/pre-edit-backup.py).
+# Каждая правка кладёт копию файла в .edit-backups/<timestamp>/<rel-path>.
+.edit-backups/
+
 # Системные мусорные файлы Windows/macOS, которые создают проводники.
 Thumbs.db
 ehthumbs.db

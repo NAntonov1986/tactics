@@ -13,7 +13,7 @@
                                                    остальные скиллы разрешены),
          applyDurationEffect(target, id, name, duration) — общий код
             наложения «duration-only» эффектов (без тиров и statMod);
-            используется тройкой Burning/Poisoned/Stunned/Immobilized.
+            используется пятёркой Burning/Poisoned/Stunned/Immobilized/Frightened.
          POISON_TIER_RANK — таблица «basic < advanced < elite» для апгрейда
             трупного яда при повторном наложении.
      • Утилиты по эффектам:

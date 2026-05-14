@@ -515,8 +515,9 @@ function createInitialState() {
        ownerTeam, payload}`. Один объект на клетку. Юнит и объект могут
        стоять на одной клетке (объект НЕ блокирует движение в общем
        случае; конкретные правила — у объектов через payload).
-       На переходе к новой волне — очищается. Хук onUnitEnterCell в
-       movement.js (сейчас no-op, потребители появятся в Сессии 22). */
+       На переходе к новой волне — очищается. Реакция на вход юнита в
+       клетку — через triggerObjectsOnPathStep + triggerObjectsOnMoveEnd
+       в movement.js (Сессия 22). */
     objects: [],
     /* state.partyInventory (С1-предметы, переработан в С8 08.05.2026):
        массив ячеек FIXED-размера PARTY_INVENTORY_SIZE. Каждая ячейка —

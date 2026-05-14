@@ -286,9 +286,9 @@ function canActivateSkill(unit, skillId, slotIdx) {
   if (typeof params.manaCost === 'number' && unit.mana < params.manaCost) return false;
   if (params.movesUser && !canUnitMove(unit)) return false;
   // Сессия 17: requireUnusedAttack/Move — для скиллов, которые ТРЕБУЮТ
-  // не-использованного действия в этом ходу (задел; в C18+ Рывок/Блок
-  // могут использовать это поле). Сейчас ни один скилл не выставляет
-  // эти флаги, ветки no-op.
+  // не-использованного действия в этом ходу. На данный момент:
+  // requireUnusedMove — выставлен у charge и cover (data/skills.js);
+  // requireUnusedAttack — задел, ни один скилл не использует.
   if (params.requireUnusedAttack && unit.actionsUsedThisTurn && unit.actionsUsedThisTurn.attack) return false;
   if (params.requireUnusedMove   && unit.actionsUsedThisTurn && unit.actionsUsedThisTurn.move)   return false;
   // Сессия 20: requireUsedAttack — для «Второй атаки» воина. Зеркало

@@ -21,8 +21,10 @@
 - [styles/](styles/) — CSS по экранам/компонентам (base, board, camp, panel, inventory, level-up, log, tooltip, fantasy-тема и др.).
 - [assets/sprites/](assets/sprites/) — спрайты.
 - [tools/](tools/) — вспомогательные скрипты (например, `gen-skills.js`).
-- [archive/](archive/) — архив завершённых сессий и логов рефакторинга.
-- [backup/](backup/) — бекапы.
+- [archive/](archive/) — архив завершённых сессий и логов рефакторинга (в обычных сессиях не подключается).
+- [backup/](backup/) — ручные снимки проекта перед сессией (создаются пользователем; в `.gitignore`).
+- [.claude/](.claude/) — конфигурация Claude Code: `settings.json` + папка `hooks/` со скриптами хуков (например, `pre-edit-backup.py`).
+- `.edit-backups/` — автоматические копии файлов перед каждым Edit/Write/MultiEdit/NotebookEdit (создаётся хуком; в `.gitignore`).
 
 ## Правила работы
 

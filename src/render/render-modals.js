@@ -117,17 +117,8 @@
           <button class="camp-btn camp-btn-primary" data-trophy-action="close">Продолжить</button>
         </div>
       </div>`;
-    // Делегированный обработчик. Заново вешать на каждом render — нормально:
-    // мы перезаписываем innerHTML, ссылки на старые обработчики уходят с
-    // DOM-нодами.
-    el.onclick = function (e) {
-      const t = e.target && e.target.closest && e.target.closest('[data-trophy-action]');
-      if (!t) return;
-      const a = t.getAttribute('data-trophy-action');
-      if (a === 'close') {
-        if (typeof closeTrophyPopup === 'function') closeTrophyPopup();
-      }
-    };
+    // Клик по «Продолжить» ловится document-level delegation
+    // (attachClickDelegation, см. ниже) — единая точка, без onclick на overlay.
   }
 
   function renderEventsPopup() {
@@ -161,17 +152,12 @@
           <button class="camp-btn camp-btn-primary" data-events-action="close">Продолжить</button>
         </div>
       </div>`;
-    el.onclick = function (e) {
-      const t = e.target && e.target.closest && e.target.closest('[data-events-action]');
-      if (!t) return;
-      const a = t.getAttribute('data-events-action');
-      if (a === 'close') {
-        if (typeof closeCampEventsPopup === 'function') closeCampEventsPopup();
-      }
-    };
+    // Клик по «Продолжить» ловится document-level delegation
+    // (attachClickDelegation, см. ниже) — единая точка, без onclick на overlay.
   }
 
-  /* Document-level click delegation as a safety net. */
+  /* Document-level click delegation — единая точка для кнопок «Продолжить»
+     в trophy/events попапах. Биндится один раз при загрузке файла. */
   let _delegationAttached = false;
   function attachClickDelegation() {
     if (_delegationAttached) return;

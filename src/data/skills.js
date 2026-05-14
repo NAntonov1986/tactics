@@ -1362,7 +1362,7 @@ const SKILLS = {
        в 'active'. Продвинутая/Элитная: тем, кого реально перевели,
        выдаётся бафф +2/+4 spd с expiresAt:'turnEnd' (снимется в конце
        ИХ следующего хода) и пересчитывается state.initiativeOrder
-       для остатка раунда (refreshInitiativeAfterCurrent в core/turn.js).
+       для остатка раунда (refreshInitiativeAfterCurrent в core/skills.js).
        Реализация — в core/skills.js → triggerPassivesAtTurnStart, ветка
        'wolf_howl'.
 

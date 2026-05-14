@@ -45,9 +45,6 @@
      • learnNewSkill(unit, skillId) — выдать в первый свободный слот.
      • upgradeSkillTier(unit, skillId) — basic→advanced→elite.
      • getLearnedSkills(unit) — { active, passive } нормализованный.
-     • getLearnedSkillsCount(unit).
-     • getLearnedActiveCount(unit) / getLearnedPassiveCount(unit) —
-       счётчики по слотам, для проверки полноты 4/4.
      • getUpgradableSkillsByTier(unit, fromTier) — выученные, у которых
        текущий тир = fromTier. Используется для фаз 2 и 3.
      • pickRandomUnlearnedSkills(unit, n=4) — n случайных непознанных
@@ -202,42 +199,6 @@ function getLearnedSkills(unit) {
     const sid = passiveIds[i];
     if (!sid) continue;
     out.passive.push({ id: sid, tier: getPassiveSkillTier(unit, sid), slot: i });
-  }
-  return out;
-}
-
-/* getLearnedSkillsCount(unit) — общее число выученных. Решение
-   «новый или прокачка» по порогу MAX_SKILLS (=5; правка 06.05.2026,
-   было 4). */
-function getLearnedSkillsCount(unit) {
-  const learned = getLearnedSkills(unit);
-  return learned.active.length + learned.passive.length;
-}
-
-/* getLearnedActiveCount(unit) / getLearnedPassiveCount(unit) — счётчики
-   по типам слотов. Используются в pickRandomUnlearnedSkills (фильтрация
-   по полноте 4/4). Считаем именно по getLearnedSkills (а не по длине
-   override-массива), чтобы null-слоты не учитывались. */
-function getLearnedActiveCount(unit) {
-  return getLearnedSkills(unit).active.length;
-}
-function getLearnedPassiveCount(unit) {
-  return getLearnedSkills(unit).passive.length;
-}
-
-/* getUpgradableSkills(unit) — выученные, у которых текущий тир ниже
-   elite. Возвращает плоский список { id, tier, kind, slot }.
-   Сейчас не используется напрямую (UI и state.js идут через
-   getUpgradableSkillsByTier для контроля фазы), но оставлен для
-   диагностики и возможного DevTools-чек'а. */
-function getUpgradableSkills(unit) {
-  const learned = getLearnedSkills(unit);
-  const out = [];
-  for (const s of learned.active) {
-    if (s.tier !== 'elite') out.push({ ...s, kind: 'active' });
-  }
-  for (const s of learned.passive) {
-    if (s.tier !== 'elite') out.push({ ...s, kind: 'passive' });
   }
   return out;
 }

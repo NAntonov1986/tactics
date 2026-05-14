@@ -188,13 +188,6 @@ function handleLureTrigger(obj, victim) {
   removeObject(obj.id);
 }
 
-/* Старая обёртка для обратной совместимости — теперь не используется,
-   но имя сохраняем на случай если в чём-то задержалось во внешнем коде.
-   В рамках С22 заменена на пару triggerObjectsOnPathStep + …OnMoveEnd. */
-function triggerOnUnitEnterCell(unit, row, col) {
-  triggerObjectsOnMoveEnd(unit, row, col);
-}
-
 /* Клетка непроходима? Живой юнит ИЛИ надгробие ИЛИ дерево. */
 function isBlocked(row, col) {
   return !!unitAt(row, col) || !!graveAt(row, col) || treeAt(row, col);

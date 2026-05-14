@@ -144,7 +144,7 @@ function saveToLocalStorage() {
     const snap = _buildSaveSnapshot();
     const json = JSON.stringify(snap);
     localStorage.setItem(_getSaveKey(), json);
-    if (typeof DebugLog !== 'undefined') DebugLog.log('wave', 'saveToLocalStorage', { wave: snap.wave.number, heroes: snap.units.length, items: snap.partyInventory.filter(Boolean).length });
+    if (typeof DebugLog !== 'undefined') DebugLog.log('wave', 'saveToLocalStorage', { wave: snap.wave.number, heroes: snap.party.length, items: snap.partyInventory.filter(Boolean).length });
     return true;
   } catch (e) {
     console.warn('[save] saveToLocalStorage failed:', e);
