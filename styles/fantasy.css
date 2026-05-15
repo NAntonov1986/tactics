@@ -528,6 +528,26 @@ html[data-theme] .equipment-slots {
 }
 html[data-theme] .equipment-slots { grid-template-columns: repeat(5, 60px); }
 
+/* «Особенности» (15.05.2026) — зеркальный размер ячеек к .equipment-slots
+   для фэнтези-темы: 60px (вместо базовых 56px). Без этого блока ячейки
+   Особенностей оставались бы 56px, потому что fantasy.css имеет более
+   высокую специфичность (html[data-theme] .slot) и перебивает явные
+   width/height из panel.css → .traits-slots .slot. */
+html[data-theme] .traits-slots {
+  grid-template-columns: repeat(5, 60px);
+  grid-auto-rows: 60px;
+  gap: 6px;
+}
+html[data-theme] .traits-slots .slot {
+  width: 60px;
+  height: 60px;
+  aspect-ratio: auto;
+}
+/* Золотая рамка для «постоянных» ячеек (врождённая + элита). */
+html[data-theme] .traits-slots .slot.trait-permanent {
+  border-color: var(--ft-accent);
+}
+
 html[data-theme] .slot {
   background:
     radial-gradient(circle at 50% 25%, rgba(255, 220, 160, 0.10) 0%, transparent 60%),

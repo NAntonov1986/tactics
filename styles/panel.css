@@ -124,6 +124,31 @@
 
 .equipment-slots { display: grid; grid-template-columns: repeat(5, 56px); gap: 4px; justify-content: start; }
 
+/* «Особенности» (15.05.2026) — пять ячеек 56×56 (унифицировано с
+   .slots и .equipment-slots). Ячейки 1-2 — «постоянные» (врождённая
+   + элитный класс), 3-5 — приобретённые состояния. У постоянных
+   золотая рамка (`.trait-permanent`) — визуальное отличие согласно
+   DESIGN.md («слева навсегда, справа лечимо»). */
+.traits-slots {
+  display: grid;
+  grid-template-columns: repeat(5, 56px);
+  grid-auto-rows: 56px;
+  gap: 4px;
+  justify-content: start;
+}
+/* aspect-ratio:1 от .slot во вложенном grid внутри flex column иногда
+   считается некорректно — жёстко задаём 56×56 явными width/height
+   с повышенной специфичностью селектора (.traits-slots .slot),
+   чтобы перетереть базовый .slot { aspect-ratio: 1 }. */
+.traits-slots .slot {
+  width: 56px;
+  height: 56px;
+  aspect-ratio: auto;
+}
+.traits-slots .slot.trait-permanent {
+  border-color: var(--accent);
+}
+
 /* Слот активного навыка — кликабельный, когда условия выполнены.
    Логика «доступен / нет маны / на кулдауне» вешает соответствующие
    модификаторы (.mode-on / .used / .no-mana). */

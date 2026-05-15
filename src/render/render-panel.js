@@ -911,6 +911,31 @@ function renderBottomPanel() {
     return `<div class="slot filled" title="${title}">${face}</div>`;
   }).join('');
 
+  /* Каркас «Особенности» (15.05.2026). 5 ячеек одного размера (56×56,
+     как у экипировки и навыков):
+       • 1 — врождённая особенность (выдаётся при найме, не снимается) —
+             золотая рамка;
+       • 2 — особенность элитного класса (открывается на 15-м уровне) —
+             золотая рамка;
+       • 3-5 — приобретённые состояния (травмы / проклятия / спец.).
+     Логики пока нет — это UI-плейсхолдер под систему Traits (см. DESIGN.md
+     «Будущая система: Особенности»). Источник данных появится позже. */
+  const traitDefs = [
+    { kind: 'innate', cls: 'slot trait-slot trait-permanent',
+      hint: 'Врождённая особенность героя. Выдаётся при найме, не снимается.' },
+    { kind: 'elite',  cls: 'slot trait-slot trait-permanent',
+      hint: 'Особенность элитного класса. Открывается на 15-м уровне.' },
+    { kind: 'state',  cls: 'slot trait-slot',
+      hint: 'Травма / проклятие / спец. состояние (приобретённое).' },
+    { kind: 'state',  cls: 'slot trait-slot',
+      hint: 'Травма / проклятие / спец. состояние (приобретённое).' },
+    { kind: 'state',  cls: 'slot trait-slot',
+      hint: 'Травма / проклятие / спец. состояние (приобретённое).' }
+  ];
+  const traitsHtml = traitDefs.map(t =>
+    `<div class="${t.cls}" data-trait-kind="${t.kind}" title="${t.hint}"></div>`
+  ).join('');
+
   // Эффекты — квадратные чипы 48×48 с pixel-art иконкой и бейджем
   // длительности в правом нижнем углу. Tooltip формата:
   //   Название (включая тир для Трупного яда)
@@ -1094,6 +1119,8 @@ function renderBottomPanel() {
     <div class="section">
       <div class="section-title">Экипировка</div>
       <div class="equipment-slots">${equipSlots}</div>
+      <div class="section-title">Особенности</div>
+      <div class="traits-slots">${traitsHtml}</div>
     </div>
     <div class="section">
       <div class="section-title">Воздействия</div>
