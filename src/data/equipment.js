@@ -9,8 +9,10 @@
          armorType (ключ типа: 'heavy_armor' | 'medium_armor' | 'robe').
             Используется class-локами через CLASSES[id].allowedArmorTypes
             (вводится в S4),
-         armorFlat (флэт-снижение физического урона, читается в
-            computeIncomingDamage; интегрируется в S4),
+         per-class свойство (см. шапку ARMORS ниже): heavy_armor →
+            armoredOnSpawn, medium_armor → attackDamageBonus,
+            robe → manaDiscount, priest_robe → incomingReduction
+            (балансная правка 14.05.2026 заменила общий armorFlat),
          tier (1/2/3 — индекс качества базы),
          costPoints (стоимость в очках сложности; используется в
             cost-fitting генераторе loot.js, появится в S6).
@@ -29,14 +31,18 @@
      • PREFIXES/SUFFIXES (аффиксы) — отдельный реестр в data/affixes.js
        (вводится в S2). Аффиксы — самостоятельная сущность, не привязаны
        к конкретной базе.
-     • Логика armorFlat в фазе 1 урона — в core/damage.js (S4).
+     • Логика per-class свойств брони — в core/damage.js (incomingReduction),
+       core/state.js startMission (armoredOnSpawn), data/weapons.js
+       weaponDamage (attackDamageBonus), core/skills.js getUnitSkillParams
+       (manaDiscount).
      • UI инвентаря и экипировки между волнами — в render/render-inventory.js
        (вводится в S1, наполняется по ходу фаз).
      • Cost-fitting генератор предметов — в core/loot.js (S6).
 
    На этапе С1 все реестры объявлены пустыми. Заполняются:
      • S3: WEAPONS получит тиры (это в data/weapons.js).
-     • S4: ARMORS получит тиры и armorFlat.
+     • S4: ARMORS получил тиры и per-class свойства (правка 14.05.2026,
+       раньше был armorFlat).
      • S5: RINGS / AMULETS получат стартовые записи (одно «голое» кольцо
        и один «голый» амулет, как носители аффиксов).
 
@@ -46,101 +52,103 @@
 /* ================================================================
    === БРОНЯ ======================================================
    ================================================================
-   С4-предметы (08.05.2026): три armorType × 3 тира.
-   • heavy_armor — воин (Кожаный доспех / Кольчуга / Латные доспехи).
-   • medium_armor — лучник (Лёгкая куртка / Кожаный нагрудник /
-     Усиленный плащ).
-   • robe — маг (Мантия ученика / Магическая мантия / Мантия архимага).
-   armorFlat скейлится 1/2/3 по тиру; стоимость 2/4/6.
-   armorFlat читается в computeIncomingDamage (core/damage.js) фаза 1
-   ПОСЛЕ shield_block и ДО armored, только для damageType:'physical'.
-   Магия/огонь/яд/прочие типы броню обходят.
+   Балансная правка 14.05.2026: одинаковый для всех armorFlat заменён
+   на per-class свойства. Стоимости тиров переведены с 2/4/6 на 3/6/9.
 
-   Спрайты: сейчас есть PNG только для heavy-серии и кожаного нагрудника
-   (medium tier 2). Для остальных spriteSrc:null — UI берёт icon-эмодзи
-   как fallback. Когда пользователь дополнит спрайты — заменить null
-   на путь и всё. */
+   • heavy_armor (воин) — `armoredOnSpawn: 4/6/8`. При startMission воин
+     с надетой тяжёлой бронёй получает свежий эффект `armored` с N
+     зарядами (расходуются в фазе 2 computeIncomingDamage). Между
+     миссиями стэк не переносится — броня «перезаряжается» в лагере.
+   • medium_armor (лучник) — `attackDamageBonus: 1/2/3`. Прибавляется
+     к weapon.damage через equipmentSpecialSum в weaponDamage. Бонус
+     попадает в БАЗОВУЮ часть удара ⇒ удваивается критом (симметрично
+     damage-аффиксу оружия). Действует на все атаки, идущие через
+     weaponDamage (базовый выстрел и все скиллы лучника).
+   • robe (маг) — `manaDiscount: 1/2/3`. Уменьшает manaCost любого
+     активного навыка в effectiveSkillParams; пол min(1) — бесплатных
+     кастов не бывает.
+   • priest_robe (священник) — `incomingReduction: 1/2/3`. Флэт-минус
+     к ЛЮБОМУ входящему урону, ВКЛЮЧАЯ DoT-тики; считается отдельной
+     фазой в computeIncomingDamage (до armored), минимум 1. */
 const ARMORS = {
   // ============ heavy_armor (воин) ============
   leather_armor: {
     id: 'leather_armor', name: 'Кожаный доспех', icon: '🛡',
     gender: 'm',
     spriteSrc: 'assets/sprites/leather_armor.png',
-    armorType: 'heavy_armor', tier: 1, armorFlat: 1, costPoints: 2
+    armorType: 'heavy_armor', tier: 1, armoredOnSpawn: 4, costPoints: 3
   },
   chain_mail: {
     id: 'chain_mail', name: 'Кольчуга', icon: '🛡',
     gender: 'f',
     spriteSrc: 'assets/sprites/chain_mail.png',
-    armorType: 'heavy_armor', tier: 2, armorFlat: 2, costPoints: 4
+    armorType: 'heavy_armor', tier: 2, armoredOnSpawn: 6, costPoints: 6
   },
   plate_armor: {
     id: 'plate_armor', name: 'Латные доспехи', icon: '🛡',
     gender: 'pl',
     spriteSrc: 'assets/sprites/plate_armor.png',
-    armorType: 'heavy_armor', tier: 3, armorFlat: 3, costPoints: 6
+    armorType: 'heavy_armor', tier: 3, armoredOnSpawn: 8, costPoints: 9
   },
 
   // ============ medium_armor (лучник) ============
   light_jacket: {
     id: 'light_jacket', name: 'Лёгкая куртка', icon: '🛡',
     gender: 'f',
-    spriteSrc: null,  // спрайт ещё не добавлен
-    armorType: 'medium_armor', tier: 1, armorFlat: 1, costPoints: 2
+    spriteSrc: 'assets/sprites/light_jacket.png',
+    armorType: 'medium_armor', tier: 1, attackDamageBonus: 1, costPoints: 3
   },
   leather_chestplate: {
     id: 'leather_chestplate', name: 'Кожаный нагрудник', icon: '🛡',
     gender: 'm',
     spriteSrc: 'assets/sprites/leather_chestplate.png',
-    armorType: 'medium_armor', tier: 2, armorFlat: 2, costPoints: 4
+    armorType: 'medium_armor', tier: 2, attackDamageBonus: 2, costPoints: 6
   },
   reinforced_cloak: {
-    id: 'reinforced_cloak', name: 'Усиленный плащ', icon: '🛡',
+    id: 'reinforced_cloak', name: 'Костюм рейнджера', icon: '🛡',
     gender: 'm',
-    spriteSrc: null,
-    armorType: 'medium_armor', tier: 3, armorFlat: 3, costPoints: 6
+    spriteSrc: 'assets/sprites/reinforced_cloak.png',
+    armorType: 'medium_armor', tier: 3, attackDamageBonus: 3, costPoints: 9
   },
 
   // ============ robe (маг) ============
   apprentice_robe: {
     id: 'apprentice_robe', name: 'Мантия ученика', icon: '🛡',
     gender: 'f',
-    spriteSrc: null,
-    armorType: 'robe', tier: 1, armorFlat: 1, costPoints: 2
+    spriteSrc: 'assets/sprites/apprentice_robe.png',
+    armorType: 'robe', tier: 1, manaDiscount: 1, costPoints: 3
   },
   magic_robe: {
     id: 'magic_robe', name: 'Магическая мантия', icon: '🛡',
     gender: 'f',
-    spriteSrc: null,
-    armorType: 'robe', tier: 2, armorFlat: 2, costPoints: 4
+    spriteSrc: 'assets/sprites/magic_robe.png',
+    armorType: 'robe', tier: 2, manaDiscount: 2, costPoints: 6
   },
   archmage_robe: {
     id: 'archmage_robe', name: 'Мантия архимага', icon: '🛡',
     gender: 'f',
-    spriteSrc: null,
-    armorType: 'robe', tier: 3, armorFlat: 3, costPoints: 6
+    spriteSrc: 'assets/sprites/archmage_robe.png',
+    armorType: 'robe', tier: 3, manaDiscount: 3, costPoints: 9
   },
 
-  /* Рясы священника (09.05.2026). Отдельный armorType:'priest_robe',
-     чтобы маг и священник не путались — у них разные классовые роли.
-     Сейчас параметры armorFlat 1/2/3 как у других branches. */
+  // ============ priest_robe (священник) ============
   priest_robe: {
     id: 'priest_robe', name: 'Ряса священника', icon: '🛡',
     gender: 'f',
     spriteSrc: 'assets/sprites/priest_robe.png',
-    armorType: 'priest_robe', tier: 1, armorFlat: 1, costPoints: 2
+    armorType: 'priest_robe', tier: 1, incomingReduction: 1, costPoints: 3
   },
   reinforced_robe: {
     id: 'reinforced_robe', name: 'Укреплённая ряса', icon: '🛡',
     gender: 'f',
     spriteSrc: 'assets/sprites/reinforced_robe.png',
-    armorType: 'priest_robe', tier: 2, armorFlat: 2, costPoints: 4
+    armorType: 'priest_robe', tier: 2, incomingReduction: 2, costPoints: 6
   },
   high_priest_robe: {
     id: 'high_priest_robe', name: 'Ряса первосвященника', icon: '🛡',
     gender: 'f',
     spriteSrc: 'assets/sprites/high_priest_robe.png',
-    armorType: 'priest_robe', tier: 3, armorFlat: 3, costPoints: 6
+    armorType: 'priest_robe', tier: 3, incomingReduction: 3, costPoints: 9
   }
 };
 
@@ -188,18 +196,6 @@ function getUnitArmor(unit) {
   return e;  // инстанс предмета (создаётся loot.js в S6)
 }
 
-/* С4-предметы: суммарное флэт-снижение физического урона от брони.
-   Используется в core/damage.js → computeIncomingDamage фаза 1.5.
-   Источник: armorFlat у надетой брони (если есть). На С4 поле живёт
-   только на ARMORS-записи или инстансе с тем же полем. В будущем сюда
-   же может прибавиться бонус от аффиксов («Крепкий», +N к броне) —
-   пока такого аффикса нет. */
-function armorFlatOf(unit) {
-  const a = getUnitArmor(unit);
-  if (!a) return 0;
-  const v = a.armorFlat | 0;
-  return v > 0 ? v : 0;
-}
 function getUnitRing(unit) {
   if (!unit || !unit.equipment) return null;
   const e = unit.equipment.ring;

@@ -327,10 +327,42 @@ function equipmentSpecialSum(unit, specialKey) {
   if (!unit || !unit.equipment || !specialKey) return 0;
   let sum = 0;
   const SLOT_KEYS = ['weapon', 'armor', 'amulet', 'ring'];
+  // Резолвер реестра по слоту — используется в двух местах ниже:
+  // (1) string-id → запись реестра; (2) старый инстанс из сейва без
+  // нового поля → fallback через baseId.
+  const regOf = function (slot) {
+    if (slot === 'weapon') return (typeof WEAPONS !== 'undefined') ? WEAPONS : null;
+    if (slot === 'armor')  return (typeof ARMORS  !== 'undefined') ? ARMORS  : null;
+    if (slot === 'ring')   return (typeof RINGS   !== 'undefined') ? RINGS   : null;
+    if (slot === 'amulet') return (typeof AMULETS !== 'undefined') ? AMULETS : null;
+    return null;
+  };
   for (const slot of SLOT_KEYS) {
     const e = unit.equipment[slot];
-    if (!e || typeof e === 'string') continue;
-    const affixIds = [e.prefix, e.suffix].filter(Boolean);
+    if (!e) continue;
+    // 1. Резолвим в record: string-id → запись реестра; объект — как есть.
+    let item;
+    if (typeof e === 'string') {
+      const REG = regOf(slot);
+      item = REG ? REG[e] : null;
+    } else {
+      item = e;
+    }
+    if (!item) continue;
+    // 2. Базовое свойство (балансная правка 14.05.2026): per-class
+    // поля брони лежат прямо на record / инстансе. Если поля нет на
+    // самом item — fallback через baseId в реестр (помогает старым
+    // инстансам из сейвов, где сохранены до правки 14.05.2026 без
+    // нового поля). Fix 15.05.2026.
+    if (typeof item[specialKey] === 'number') {
+      sum += item[specialKey];
+    } else if (item.baseId) {
+      const REG = regOf(slot);
+      const base = REG ? REG[item.baseId] : null;
+      if (base && typeof base[specialKey] === 'number') sum += base[specialKey];
+    }
+    // 3. Аффиксы — только у инстанса (у базовой записи реестра их нет).
+    const affixIds = [item.prefix, item.suffix].filter(Boolean);
     for (const aid of affixIds) {
       const aff = (typeof AFFIXES === 'object' && AFFIXES) ? AFFIXES[aid] : null;
       if (!aff || !aff.statMods) continue;

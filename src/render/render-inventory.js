@@ -696,8 +696,10 @@
     wis: 'Мудрость', int: 'Интеллект', luk: 'Удача',
     damage: 'Базовый урон', hp_regen: 'Рег. HP/ход', mana_regen: 'Рег. маны/ход'
   };
+  // Балансная правка 15.05.2026: метки типа брони — по классу-носителю,
+  // не по «весу». Включён priest_robe (раньше был пропущен).
   const ARMOR_TYPE_LABELS = {
-    heavy_armor: 'Тяжёлая', medium_armor: 'Средняя', robe: 'Мантия'
+    heavy_armor: 'Воин', medium_armor: 'Лучник', robe: 'Маг', priest_robe: 'Священник'
   };
 
   function buildItemDetailLines(item, wearer) {
@@ -708,10 +710,22 @@
       const cost = itemTotalCost(item);
       if (cost > 0) out.push(`Стоимость: ${cost} оч.`);
     }
-    if (item.armorFlat != null) {
+    if (item.armorType) {
       const tLabel = ARMOR_TYPE_LABELS[item.armorType] || item.armorType || '?';
       out.push(`Тип брони: ${tLabel}`);
-      out.push(`Защита: −${item.armorFlat | 0} к физ. урону`);
+      // Балансная правка 14.05.2026: per-class свойства брони.
+      if (typeof item.armoredOnSpawn === 'number') {
+        out.push(`«Бронирован»: ${item.armoredOnSpawn | 0} зар. в начале миссии`);
+      }
+      if (typeof item.attackDamageBonus === 'number') {
+        out.push(`Урон атак: +${item.attackDamageBonus | 0}`);
+      }
+      if (typeof item.manaDiscount === 'number') {
+        out.push(`Стоимость навыков в мане: −${item.manaDiscount | 0} (минимум 1)`);
+      }
+      if (typeof item.incomingReduction === 'number') {
+        out.push(`Получаемый урон: −${item.incomingReduction | 0} (любой тип, включая эффекты)`);
+      }
     }
     if (item.formula) {
       const desc = (typeof describeDamage === 'function')
@@ -831,7 +845,12 @@
       const base = ARMORS[baseId];
       baseFields = {
         armorType: base.armorType,
-        armorFlat: base.armorFlat,
+        // Балансная правка 14.05.2026: вместо общего armorFlat —
+        // per-class свойство. Копируем то, что есть на базе.
+        armoredOnSpawn: base.armoredOnSpawn,
+        attackDamageBonus: base.attackDamageBonus,
+        manaDiscount: base.manaDiscount,
+        incomingReduction: base.incomingReduction,
         tier: base.tier,
         costPoints: base.costPoints,
         spriteSrc: base.spriteSrc || null

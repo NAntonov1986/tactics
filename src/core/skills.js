@@ -184,7 +184,20 @@ function getUnitSkillParams(unit, skillId, slotIdx) {
   } else {
     tier = getActiveSkillTier(unit, skillId);
   }
-  return effectiveSkillParams(skill, tier);
+  const params = effectiveSkillParams(skill, tier);
+  // Балансная правка 14.05.2026: мантия мага даёт manaDiscount 1/2/3
+  // на базе. Снижаем итоговый manaCost любого активного навыка с
+  // полом 1 (бесплатных кастов не бывает). Применяется ТОЛЬКО если
+  // у skill была реальная manaCost — нулевые / отсутствующие
+  // оставляем как есть (passive-эффекты, пассивные баффы и т.п.).
+  if (typeof params.manaCost === 'number' && params.manaCost > 0
+      && unit && typeof equipmentSpecialSum === 'function') {
+    const discount = equipmentSpecialSum(unit, 'manaDiscount');
+    if (discount > 0) {
+      params.manaCost = Math.max(1, params.manaCost - discount);
+    }
+  }
+  return params;
 }
 
 /* Применить эффект, описанный в `applyEffect: { id, duration }`

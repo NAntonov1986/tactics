@@ -911,6 +911,20 @@ function startMission(regionId, heroIds) {
     // На случай если предыдущий бой оставил alive=false как gameOver-side-effect.
     hero.alive = true;
     hero.isDying = false;
+    // Балансная правка 14.05.2026: heavy_armor (надетый тяжёлый
+    // доспех) даёт `armoredOnSpawn` зарядов эффекта armored в начале
+    // каждой миссии. Между миссиями стэк не переносится — броня
+    // «перезаряжается» в лагере. Источник числа — поле на инстансе
+    // или базовой записи ARMORS (см. data/equipment.js). getUnitArmor
+    // резолвит id-строку через ARMORS, поэтому базовая надетая броня
+    // тоже учитывается (fix 15.05.2026, раньше пропускалась).
+    const armorRecord = (typeof getUnitArmor === 'function') ? getUnitArmor(hero) : null;
+    if (armorRecord
+        && typeof armorRecord.armoredOnSpawn === 'number'
+        && armorRecord.armoredOnSpawn > 0
+        && typeof applyArmored === 'function') {
+      applyArmored(hero, armorRecord.armoredOnSpawn);
+    }
   }
 
   // state.units заново: только участники + спавненные монстры.

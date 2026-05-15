@@ -189,9 +189,8 @@ const WEAPONS = {
   /* Призрачные когти (12.05.2026). Натуральное оружие Призрака (group:undead,
      лидер группы с 5-й волны). delivery:'melee' (range:1), но damageType:
      'magic' — урон вкладывается магической природой призрачной плоти,
-     обходит armorFlat (фаза 1.5 в core/damage.js), не блокируется
-     fire_shield (там фильтр fire/frost). База 3 + Сила/2 — заметно выше
-     обычных когтей (2 + Сила/2), чтобы при стартовой Силе 6 раздавать
+     не блокируется fire_shield (там фильтр fire/frost). База 3 + Сила/2 —
+     заметно выше обычных когтей (2 + Сила/2), чтобы при стартовой Силе 6 раздавать
      стабильно 6 урона за удар, и компенсировать отсутствие у Призрака
      второй атаки/яда. weaponType:'ghost_claws' — отдельный, в
      allowedWeaponTypes у героев его быть не должно. */
@@ -242,6 +241,11 @@ function weaponDamage(weapon, stats, unit) {
     : 0;
   if (unit && typeof equipmentSpecialSum === 'function') {
     base += equipmentSpecialSum(unit, 'damage');
+    // Балансная правка 14.05.2026: medium_armor (лучник) даёт
+    // attackDamageBonus 1/2/3 на базе. equipmentSpecialSum суммирует
+    // поле напрямую с item-инстанса в слоте armor. Бонус попадает в
+    // базу удара ⇒ удваивается критом (симметрично damage-аффиксу).
+    base += equipmentSpecialSum(unit, 'attackDamageBonus');
   }
   return base;
 }

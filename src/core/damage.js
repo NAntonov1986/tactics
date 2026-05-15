@@ -191,22 +191,29 @@ function computeIncomingDamage(target, dmg, damageType, opts) {
       }
     }
   }
-  // 1.5 armorFlat (С4-предметы 08.05.2026) — флэт-снижение от надетой
-  // брони. Только для damageType:'physical'. Магия, огонь, мороз,
-  // электричество, яд, святой — броню обходят. Источник armorFlat —
-  // запись ARMORS (для базовой надетой брони с id-string) либо инстанс
-  // предмета в слоте armor (после S6-генератора). Логика чтения —
-  // armorFlatOf(unit) ниже. Пол 1, как у shield_block/reinforcement
-  // (полное обнуление через броню недоступно — броня не может
-  // превратить удар в «промах»).
-  if (damageType === 'physical' && incoming > 0 && !isDoTTick
-      && typeof armorFlatOf === 'function') {
-    const af = armorFlatOf(target);
-    if (af > 0) {
+  // 1.5 incomingReduction от рясы священника (балансная правка
+  // 14.05.2026). priest_robe даёт `incomingReduction: 1/2/3` —
+  // флэт-минус ко ВСЕМУ входящему урону, ВКЛЮЧАЯ DoT-тики (Burning/
+  // Poisoned). Все типы урона (физика, магия, огонь, мороз, яд,
+  // святой) — снижаются равнозначно: священник универсально стоек.
+  // Минимум 1 (полное обнуление недоступно, как у shield_block).
+  //
+  // Это единственное место в фазе 1, где DoT-тик уменьшается флэтом
+  // (раньше это умел только endurance с другой механикой). Для DoT
+  // фильтр isDoTTick тут отключён намеренно — по дизайну.
+  //
+  // Источник числа — equipmentSpecialSum(target, 'incomingReduction')
+  // (читает поле с базы item-инстанса в слоте armor, а также любых
+  // будущих аффиксов с тем же ключом). Старая фаза «armorFlat для
+  // физики» убрана — теперь типовые свойства брони различаются
+  // per-class (см. data/equipment.js шапку).
+  if (incoming > 0 && typeof equipmentSpecialSum === 'function') {
+    const reduction = equipmentSpecialSum(target, 'incomingReduction');
+    if (reduction > 0) {
       const before = incoming;
-      incoming = Math.max(1, incoming - af);
+      incoming = Math.max(1, incoming - reduction);
       const reduced = before - incoming;
-      if (reduced > 0) notes.push(`броня −${reduced}`);
+      if (reduced > 0) notes.push(`ряса −${reduced}`);
     }
   }
   // 1.6 bony (09.05.2026) — пассивка скелетов «Костлявый». Снижает

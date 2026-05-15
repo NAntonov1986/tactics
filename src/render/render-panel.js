@@ -220,9 +220,15 @@ function renderBottomPanel() {
     // случай будущих расширений.
     const dmgBonus = (typeof equipmentSpecialSum === 'function')
       ? equipmentSpecialSum(u, 'damage') : 0;
-    const formulaLine = (dmgBonus > 0)
-      ? `Формула: ${weaponFormulaText(weapon)} + ${dmgBonus} (аффиксы оружия)`
-      : `Формула: ${weaponFormulaText(weapon)}`;
+    // Балансная правка 14.05.2026: medium_armor (лучник) даёт
+    // attackDamageBonus 1/2/3 от базы. Показываем отдельной частью
+    // строки формулы, чтобы игрок видел, что именно броня прибавляет.
+    const armorAttackBonus = (typeof equipmentSpecialSum === 'function')
+      ? equipmentSpecialSum(u, 'attackDamageBonus') : 0;
+    const formulaParts = [`Формула: ${weaponFormulaText(weapon)}`];
+    if (dmgBonus > 0) formulaParts.push(`+ ${dmgBonus} (аффиксы оружия)`);
+    if (armorAttackBonus > 0) formulaParts.push(`+ ${armorAttackBonus} (броня)`);
+    const formulaLine = formulaParts.join(' ');
     const lines = [
       `Атака — оружие «${weaponDisplayName}»`,
       formulaLine,
@@ -865,12 +871,24 @@ function renderBottomPanel() {
       titleLines.push(`Формула: ${weaponFormulaText(item)}`);
       titleLines.push(`Текущий урон: ${dmg}`);
     }
-    // С4-предметы: для брони — тип и флэт-снижение физического урона.
-    if (d.key === 'armor' && item.armorFlat != null) {
-      const TYPE_LABELS = { heavy_armor: 'Тяжёлая', medium_armor: 'Средняя', robe: 'Мантия' };
+    // Балансная правка 14.05.2026: для брони — тип и per-class свойство.
+    if (d.key === 'armor' && item.armorType) {
+      // Балансная правка 15.05.2026: метки типа брони — по классу-носителю.
+      const TYPE_LABELS = { heavy_armor: 'Воин', medium_armor: 'Лучник', robe: 'Маг', priest_robe: 'Священник' };
       const tLabel = TYPE_LABELS[item.armorType] || item.armorType || '?';
       titleLines.push(`Тип брони: ${tLabel}`);
-      titleLines.push(`Защита: −${item.armorFlat | 0} к физическому урону`);
+      if (typeof item.armoredOnSpawn === 'number') {
+        titleLines.push(`«Бронирован»: ${item.armoredOnSpawn | 0} зар. в начале миссии`);
+      }
+      if (typeof item.attackDamageBonus === 'number') {
+        titleLines.push(`Урон атак: +${item.attackDamageBonus | 0}`);
+      }
+      if (typeof item.manaDiscount === 'number') {
+        titleLines.push(`Стоимость навыков в мане: −${item.manaDiscount | 0} (минимум 1)`);
+      }
+      if (typeof item.incomingReduction === 'number') {
+        titleLines.push(`Получаемый урон: −${item.incomingReduction | 0} (любой тип, включая эффекты)`);
+      }
     }
     // Аффиксы — построчно. Для всех слотов (универсальный путь).
     if (typeof itemAffixes === 'function') {

@@ -26,7 +26,9 @@
        baseCost: <базовая стоимость в очках>,
        costPoints: <та же базовая стоимость — для совместимости с UI>,
        // для weapon: range, delivery, damageType, formula, weaponType, tier
-       // для armor:  armorType, armorFlat, tier
+       // для armor:  armorType, tier + ОДНО из per-class свойств
+       //             (armoredOnSpawn / attackDamageBonus / manaDiscount
+       //             / incomingReduction; см. ARMORS в data/equipment.js)
      }
 
    Алгоритм (резюме из DESIGN.md):
@@ -204,8 +206,15 @@
       inst.tier = base.tier;
     } else if (type === 'armor') {
       inst.armorType = base.armorType;
-      inst.armorFlat = base.armorFlat;
       inst.tier = base.tier;
+      // Балансная правка 14.05.2026: каждый armorType имеет своё
+      // специальное поле (см. ARMORS). Копируем то, что есть на базе —
+      // лишних веток не плодим. equipmentSpecialSum читает поле
+      // напрямую с инстанса.
+      if (typeof base.armoredOnSpawn === 'number') inst.armoredOnSpawn = base.armoredOnSpawn;
+      if (typeof base.attackDamageBonus === 'number') inst.attackDamageBonus = base.attackDamageBonus;
+      if (typeof base.manaDiscount === 'number') inst.manaDiscount = base.manaDiscount;
+      if (typeof base.incomingReduction === 'number') inst.incomingReduction = base.incomingReduction;
     }
     return inst;
   }
