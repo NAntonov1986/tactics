@@ -140,6 +140,11 @@
 <script src="src/data/economy.js"></script>
 <script src="src/core/state.js"></script>
 <script src="src/core/stats-calc.js"></script>
+<!-- units.js подключается ПОСЛЕ state.js (нужны let-переменные state/nextUnitId/
+     nextObjectId и константы HERO_SPAWN/PARTY_INVENTORY_SIZE), stats-calc.js
+     (нужен statsForLevel/maxHpOf/maxManaOf для makeUnit) и data/* (CLASSES,
+     defaultWeapon, rollUpkeepMultiplier). Расщеплено из state.js 16.05.2026. -->
+<script src="src/core/units.js"></script>
 <script src="src/core/loot.js"></script>
 <script src="src/core/save.js"></script>
 <script src="src/core/damage.js"></script>
