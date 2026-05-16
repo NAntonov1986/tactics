@@ -145,6 +145,15 @@
      (нужен statsForLevel/maxHpOf/maxManaOf для makeUnit) и data/* (CLASSES,
      defaultWeapon, rollUpkeepMultiplier). Расщеплено из state.js 16.05.2026. -->
 <script src="src/core/units.js"></script>
+<!-- spawn.js — реестр WAVE_GROUPS и спавн волн (spawnGroupWave + хелперы).
+     Зависит от units.js (makeUnit, pickRandomFreeCellTopHalf) и data/economy.js
+     (missionReward в rollRewardForDifficulty). Расщеплено 16.05.2026. -->
+<script src="src/core/spawn.js"></script>
+<!-- mission.js — жизненный цикл миссии (start*/check*/force*/end*/skip*/
+     close*). Зависит от units.js, spawn.js и camp.js (через позднее
+     резолвящиеся ссылки: advanceCalendarWeek, enterCampMain и т.п.).
+     Расщеплено 16.05.2026. -->
+<script src="src/core/mission.js"></script>
 <script src="src/core/loot.js"></script>
 <script src="src/core/save.js"></script>
 <script src="src/core/damage.js"></script>
