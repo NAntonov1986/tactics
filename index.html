@@ -154,6 +154,17 @@
      резолвящиеся ссылки: advanceCalendarWeek, enterCampMain и т.п.).
      Расщеплено 16.05.2026. -->
 <script src="src/core/mission.js"></script>
+<!-- camp.js — лагерь, экономика, экраны и календарь. 21 функция:
+     advance*/endOfMonth*/apply*/generate*/refresh*/regenerate*/buy*/sell*/
+     hire*/enter*/toggle*/confirm*/_pushCampEvent/_initCampEventsLog/
+     _quarterlyStabilizationCheck. Зависит от units.js, mission.js,
+     spawn.js, data/economy.js. Расщеплено 16.05.2026. -->
+<script src="src/core/camp.js"></script>
+<!-- level-up-queue.js — очередь повышения уровня героев (3 функции:
+     startLevelUpQueue / advanceLevelUpQueue / finishCurrentLevelUp).
+     Зависит от core/level-up.js, units.js, mission.js, camp.js.
+     Расщеплено 16.05.2026 (финальный шаг пункта 5 backlog). -->
+<script src="src/core/level-up-queue.js"></script>
 <script src="src/core/loot.js"></script>
 <script src="src/core/save.js"></script>
 <script src="src/core/damage.js"></script>
